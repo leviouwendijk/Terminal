@@ -1,0 +1,15 @@
+{
+  "originHash" : "c409b9f027286a0c4114190e59feda6fc425666834086c00ce8a34bcc4818110",
+  "pins" : [
+    {
+      "identity" : "ansi",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/ANSI",
+      "state" : {
+        "branch" : "master",
+        "revision" : "073d9ca7870b688a312608acf14eae6ba052c0d6"
+      }
+    }
+  ],
+  "version" : 3
+}
