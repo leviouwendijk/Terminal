@@ -164,30 +164,35 @@ public final class TerminalSession: @unchecked Sendable {
         }
 
         if options.useRawMode {
-            var rawAttributes = attributes
-            cfmakeraw(
-                &rawAttributes
-            )
+            var interactiveAttributes = attributes
 
-            rawAttributes.c_lflag |= tcflag_t(ISIG)
-            rawAttributes.c_lflag &= ~tcflag_t(ECHO | ICANON)
+            interactiveAttributes.c_lflag &= ~tcflag_t(ECHO | ICANON)
+            interactiveAttributes.c_lflag |= tcflag_t(ISIG)
+
+            interactiveAttributes.c_iflag &= ~tcflag_t(IXON)
+
+            interactiveAttributes.c_oflag |= tcflag_t(OPOST)
+
+            #if os(macOS)
+            interactiveAttributes.c_oflag |= tcflag_t(ONLCR)
+            #endif
 
             withUnsafeMutablePointer(
-                to: &rawAttributes.c_cc
+                to: &interactiveAttributes.c_cc
             ) { controlCharactersPointer in
                 controlCharactersPointer.withMemoryRebound(
                     to: cc_t.self,
                     capacity: Int(NCCS)
                 ) { controlCharacters in
-                    controlCharacters[Int(VMIN)] = 0
-                    controlCharacters[Int(VTIME)] = 1
+                    controlCharacters[Int(VMIN)] = 1
+                    controlCharacters[Int(VTIME)] = 0
                 }
             }
 
             guard tcsetattr(
                 inputFileDescriptor,
                 TCSANOW,
-                &rawAttributes
+                &interactiveAttributes
             ) == 0 else {
                 throw TerminalSessionError.failedToApplyTerminalAttributes(
                     errno

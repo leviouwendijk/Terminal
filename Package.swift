@@ -13,6 +13,12 @@ let package = Package(
             name: "Terminal",
             targets: ["Terminal"]
         ),
+        .executable(
+            name: "terminaltest",
+            targets: [
+                "terminaltest"
+            ]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/leviouwendijk/ANSI", branch: "master"),
@@ -25,9 +31,15 @@ let package = Package(
                 .product(name: "ANSI", package: "ANSI"),
             ],
         ),
-        .testTarget(
-            name: "TerminalTests",
-            dependencies: ["Terminal"]
+        .executableTarget(
+            name: "terminaltest",
+            dependencies: [
+                "Terminal"
+            ]
         ),
+        // .testTarget(
+        //     name: "TerminalTests",
+        //     dependencies: ["Terminal"]
+        // ),
     ]
 )

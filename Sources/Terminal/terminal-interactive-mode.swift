@@ -1,12 +1,20 @@
 public enum TerminalInteractiveSmoke {
     public static func runKeyProbe() throws {
-        let _ = try TerminalSession(
+        let session = try TerminalSession(
             options: .interactive
         )
+
+        defer {
+            session.restore()
+        }
 
         let reader = TerminalKeyReader()
 
         Terminal.clearScreen()
+        Terminal.moveCursor(
+            line: 1,
+            column: 1
+        )
         Terminal.write(
             "Terminal key probe\n",
             to: .standardError
@@ -31,9 +39,13 @@ public enum TerminalInteractiveSmoke {
     }
 
     public static func runListProbe() throws {
-        let _ = try TerminalSession(
+        let session = try TerminalSession(
             options: .interactive
         )
+
+        defer {
+            session.restore()
+        }
 
         let reader = TerminalKeyReader()
         var navigator = TerminalListNavigator(
