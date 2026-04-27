@@ -468,7 +468,7 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
 
 private struct TerminalInteractiveListRenderer<Item: Sendable, ID: Hashable & Sendable> {
     var configuration: TerminalInteractiveListConfiguration
-    var previousLineCount: Int = 0
+    var previousRenderedRowCount: Int = 0
 
     mutating func render(
         lines: [String]
@@ -485,13 +485,13 @@ private struct TerminalInteractiveListRenderer<Item: Sendable, ID: Hashable & Se
             )
 
         case .inline:
-            if previousLineCount > 0 {
+            if previousRenderedRowCount > 0 {
                 TerminalScreenRegion.moveUp(
-                    previousLineCount,
+                    previousRenderedRowCount,
                     stream: configuration.outputStream
                 )
                 TerminalScreenRegion.clearLinesFromCursor(
-                    count: previousLineCount,
+                    count: previousRenderedRowCount,
                     stream: configuration.outputStream
                 )
             }
@@ -504,7 +504,9 @@ private struct TerminalInteractiveListRenderer<Item: Sendable, ID: Hashable & Se
             )
         }
 
-        previousLineCount = lines.count
+        previousRenderedRowCount = renderedRowCount(
+            for: lines
+        )
 
         Terminal.flush(
             configuration.outputStream
@@ -550,22 +552,72 @@ private struct TerminalInteractiveListRenderer<Item: Sendable, ID: Hashable & Se
             )
 
         case .inline:
-            if previousLineCount > 0 {
+            if previousRenderedRowCount > 0 {
                 TerminalScreenRegion.moveUp(
-                    previousLineCount,
+                    previousRenderedRowCount,
                     stream: configuration.outputStream
                 )
                 TerminalScreenRegion.clearLinesFromCursor(
-                    count: previousLineCount,
+                    count: previousRenderedRowCount,
                     stream: configuration.outputStream
                 )
             }
         }
 
-        previousLineCount = 0
+        previousRenderedRowCount = 0
 
         Terminal.flush(
             configuration.outputStream
         )
+    }
+
+    private func renderedRowCount(
+        for lines: [String]
+    ) -> Int {
+        let columns = max(
+            1,
+            Terminal.size(
+                for: configuration.outputStream
+            ).columns
+        )
+
+        return lines.reduce(0) { count, line in
+            count + renderedRowCount(
+                for: line,
+                columns: columns
+            )
+        }
+    }
+
+    private func renderedRowCount(
+        for line: String,
+        columns: Int
+    ) -> Int {
+        let stripped = stripANSI(
+            line
+        )
+
+        var pieces = stripped.components(
+            separatedBy: "\n"
+        )
+
+        if stripped.hasSuffix("\n"),
+           !pieces.isEmpty {
+            pieces.removeLast()
+        }
+
+        guard !pieces.isEmpty else {
+            return 1
+        }
+
+        return pieces.reduce(0) { count, piece in
+            let visibleCount = piece.count
+            let rowCount = max(
+                1,
+                (visibleCount + columns - 1) / columns
+            )
+
+            return count + rowCount
+        }
     }
 }
