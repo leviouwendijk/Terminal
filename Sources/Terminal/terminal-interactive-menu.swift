@@ -9,7 +9,8 @@ public struct TerminalInteractiveMenuConfiguration: Sendable, Codable, Hashable 
         hideCursor: Bool = true,
         outputStream: TerminalStream = .standardError,
         presentation: TerminalInteractiveListPresentation = .fullscreen,
-        completionPresentation: TerminalInteractiveListCompletionPresentation = .clear
+        completionPresentation: TerminalInteractiveListCompletionPresentation = .clear,
+        currentRowStyle: TerminalInteractiveCurrentRowStyle = .inverse
     ) {
         self.listConfiguration = TerminalInteractiveListConfiguration(
             title: title,
@@ -20,7 +21,8 @@ public struct TerminalInteractiveMenuConfiguration: Sendable, Codable, Hashable 
             hideCursor: hideCursor,
             outputStream: outputStream,
             presentation: presentation,
-            completionPresentation: completionPresentation
+            completionPresentation: completionPresentation,
+            currentRowStyle: currentRowStyle
         )
     }
 
@@ -36,7 +38,8 @@ public struct TerminalInteractiveMenuConfiguration: Sendable, Codable, Hashable 
             hideCursor: listConfiguration.hideCursor,
             outputStream: listConfiguration.outputStream,
             presentation: listConfiguration.presentation,
-            completionPresentation: listConfiguration.completionPresentation
+            completionPresentation: listConfiguration.completionPresentation,
+            currentRowStyle: listConfiguration.currentRowStyle
         )
     }
 
@@ -45,7 +48,8 @@ public struct TerminalInteractiveMenuConfiguration: Sendable, Codable, Hashable 
         instructions: String = "",
         wrapMode: TerminalListNavigator.WrapMode = .wrap,
         outputStream: TerminalStream = .standardError,
-        completionPresentation: TerminalInteractiveListCompletionPresentation = .leaveSummary
+        completionPresentation: TerminalInteractiveListCompletionPresentation = .leaveSummary,
+        currentRowStyle: TerminalInteractiveCurrentRowStyle = .inverse
     ) -> TerminalInteractiveMenuConfiguration {
         TerminalInteractiveMenuConfiguration(
             listConfiguration: .inline(
@@ -54,7 +58,8 @@ public struct TerminalInteractiveMenuConfiguration: Sendable, Codable, Hashable 
                 allowsMultipleSelection: false,
                 wrapMode: wrapMode,
                 outputStream: outputStream,
-                completionPresentation: completionPresentation
+                completionPresentation: completionPresentation,
+                currentRowStyle: currentRowStyle
             )
         )
     }

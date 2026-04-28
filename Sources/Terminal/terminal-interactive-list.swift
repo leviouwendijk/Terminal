@@ -9,6 +9,11 @@ public enum TerminalInteractiveListCompletionPresentation: String, Sendable, Cod
     case leaveSummary
 }
 
+public enum TerminalInteractiveCurrentRowStyle: String, Sendable, Codable, Hashable {
+    case inverse
+    case none
+}
+
 public struct TerminalInteractiveListConfiguration: Sendable, Codable, Hashable {
     public var title: String
     public var instructions: String
@@ -19,6 +24,7 @@ public struct TerminalInteractiveListConfiguration: Sendable, Codable, Hashable 
     public var outputStream: TerminalStream
     public var presentation: TerminalInteractiveListPresentation
     public var completionPresentation: TerminalInteractiveListCompletionPresentation
+    public var currentRowStyle: TerminalInteractiveCurrentRowStyle
 
     public init(
         title: String,
@@ -29,7 +35,8 @@ public struct TerminalInteractiveListConfiguration: Sendable, Codable, Hashable 
         hideCursor: Bool = true,
         outputStream: TerminalStream = .standardError,
         presentation: TerminalInteractiveListPresentation = .fullscreen,
-        completionPresentation: TerminalInteractiveListCompletionPresentation = .clear
+        completionPresentation: TerminalInteractiveListCompletionPresentation = .clear,
+        currentRowStyle: TerminalInteractiveCurrentRowStyle = .inverse
     ) {
         self.title = title
         self.instructions = instructions
@@ -40,6 +47,7 @@ public struct TerminalInteractiveListConfiguration: Sendable, Codable, Hashable 
         self.outputStream = outputStream
         self.presentation = presentation
         self.completionPresentation = completionPresentation
+        self.currentRowStyle = currentRowStyle
     }
 
     public static func inline(
@@ -48,7 +56,8 @@ public struct TerminalInteractiveListConfiguration: Sendable, Codable, Hashable 
         allowsMultipleSelection: Bool = true,
         wrapMode: TerminalListNavigator.WrapMode = .wrap,
         outputStream: TerminalStream = .standardError,
-        completionPresentation: TerminalInteractiveListCompletionPresentation = .leaveSummary
+        completionPresentation: TerminalInteractiveListCompletionPresentation = .leaveSummary,
+        currentRowStyle: TerminalInteractiveCurrentRowStyle = .inverse
     ) -> TerminalInteractiveListConfiguration {
         TerminalInteractiveListConfiguration(
             title: title,
@@ -59,7 +68,8 @@ public struct TerminalInteractiveListConfiguration: Sendable, Codable, Hashable 
             hideCursor: true,
             outputStream: outputStream,
             presentation: .inline,
-            completionPresentation: completionPresentation
+            completionPresentation: completionPresentation,
+            currentRowStyle: currentRowStyle
         )
     }
 }
@@ -447,14 +457,20 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
                 row
             )
 
-            if isCurrent && isEnabled {
-                rendered = rendered.ansi(
-                    .inverse
-                )
-            } else if !isEnabled {
+            if !isEnabled {
                 rendered = rendered.ansi(
                     .dim
                 )
+            } else if isCurrent {
+                switch configuration.currentRowStyle {
+                case .inverse:
+                    rendered = rendered.ansi(
+                        .inverse
+                    )
+
+                case .none:
+                    break
+                }
             }
 
             lines.append(
