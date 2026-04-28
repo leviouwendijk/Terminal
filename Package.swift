@@ -14,14 +14,15 @@ let package = Package(
             targets: ["Terminal"]
         ),
         .executable(
-            name: "terminaltest",
+            name: "termtest",
             targets: [
-                "terminaltest"
+                "TerminalTestFlows"
             ]
         ),
     ],
     dependencies: [
         .package(url: "https://github.com/leviouwendijk/ANSI", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/Difference", branch: "master"),
 
     ],
     targets: [
@@ -29,10 +30,11 @@ let package = Package(
             name: "Terminal",
             dependencies: [
                 .product(name: "ANSI", package: "ANSI"),
+                .product(name: "Difference", package: "Difference"),
             ],
         ),
         .executableTarget(
-            name: "terminaltest",
+            name: "TerminalTestFlows",
             dependencies: [
                 "Terminal"
             ]

@@ -408,16 +408,30 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
         navigator: TerminalListNavigator,
         selection: TerminalSelectionSet<ID>
     ) -> [String] {
+        let columns = Terminal.size(
+            for: configuration.outputStream
+        ).columns
+
         var lines: [String] = []
 
-        lines.append(
-            configuration.title + "\n"
-        )
+        for line in TerminalTextWrap.lines(
+            configuration.title,
+            width: columns
+        ) {
+            lines.append(
+                line + "\n"
+            )
+        }
 
         if !configuration.instructions.isEmpty {
-            lines.append(
-                configuration.instructions + "\n"
-            )
+            for line in TerminalTextWrap.lines(
+                configuration.instructions,
+                width: columns
+            ) {
+                lines.append(
+                    line + "\n"
+                )
+            }
         }
 
         lines.append(

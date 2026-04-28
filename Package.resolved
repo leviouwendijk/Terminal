@@ -1,5 +1,5 @@
 {
-  "originHash" : "c409b9f027286a0c4114190e59feda6fc425666834086c00ce8a34bcc4818110",
+  "originHash" : "e7d77d8bf4e6f0161f80d5bb53f7e64744e13461709e4ae468ec2ca7b81cb7d8",
   "pins" : [
     {
       "identity" : "ansi",
@@ -8,6 +8,15 @@
       "state" : {
         "branch" : "master",
         "revision" : "073d9ca7870b688a312608acf14eae6ba052c0d6"
+      }
+    },
+    {
+      "identity" : "difference",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/Difference",
+      "state" : {
+        "branch" : "master",
+        "revision" : "999beddfaa99a991807a4e07e8c0482512c94b69"
       }
     }
   ],

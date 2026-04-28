@@ -13,45 +13,124 @@ public struct TerminalMenuRowContent: Sendable, Hashable {
     public func render(
         isCurrent: Bool,
         isEnabled: Bool = true,
-        theme: TerminalTheme = .standard
+        theme: TerminalTheme = .standard,
+        width: Int? = nil
     ) -> String {
-        let cursor = isCurrent
-            ? theme.cursor.apply(">")
-            : " "
+        var lines: [String] = []
 
-        let renderedTitle: String
+        appendTitle(
+            to: &lines,
+            isCurrent: isCurrent,
+            isEnabled: isEnabled,
+            theme: theme,
+            width: width
+        )
 
-        if !isEnabled {
-            renderedTitle = theme.disabled.apply(
-                title
-            )
-        } else if isCurrent {
-            renderedTitle = theme.cursor.apply(
-                title
-            )
-        } else {
-            renderedTitle = theme.value.apply(
-                title
-            )
-        }
-
-        var lines = [
-            "\(cursor) \(renderedTitle)"
-        ]
-
-        if let caption,
-           !caption.isEmpty {
-            let renderedCaption = isEnabled
-                ? theme.caption.apply(caption)
-                : theme.disabled.apply(caption)
-
-            lines.append(
-                "  \(renderedCaption)"
-            )
-        }
+        appendCaption(
+            to: &lines,
+            isEnabled: isEnabled,
+            theme: theme,
+            width: width
+        )
 
         return lines.joined(
             separator: "\n"
         ) + "\n"
+    }
+
+    private func appendTitle(
+        to lines: inout [String],
+        isCurrent: Bool,
+        isEnabled: Bool,
+        theme: TerminalTheme,
+        width: Int?
+    ) {
+        let cursor = isCurrent
+            ? theme.cursor.apply(">")
+            : " "
+
+        let style: TerminalStyle
+
+        if !isEnabled {
+            style = theme.disabled
+        } else if isCurrent {
+            style = theme.cursor
+        } else {
+            style = theme.value
+        }
+
+        let prefix = "\(cursor) "
+        let continuationPrefix = "  "
+        let wrapped = wrappedLines(
+            title,
+            width: width,
+            indent: 2
+        )
+
+        guard let first = wrapped.first else {
+            lines.append(
+                prefix
+            )
+            return
+        }
+
+        lines.append(
+            prefix + style.apply(first)
+        )
+
+        for line in wrapped.dropFirst() {
+            lines.append(
+                continuationPrefix + style.apply(line)
+            )
+        }
+    }
+
+    private func appendCaption(
+        to lines: inout [String],
+        isEnabled: Bool,
+        theme: TerminalTheme,
+        width: Int?
+    ) {
+        guard let caption,
+              !caption.isEmpty else {
+            return
+        }
+
+        let style = isEnabled
+            ? theme.caption
+            : theme.disabled
+
+        let prefix = "    "
+        let wrapped = wrappedLines(
+            caption,
+            width: width,
+            indent: 4
+        )
+
+        for line in wrapped {
+            lines.append(
+                prefix + style.apply(line)
+            )
+        }
+    }
+
+    private func wrappedLines(
+        _ text: String,
+        width: Int?,
+        indent: Int
+    ) -> [String] {
+        guard let width else {
+            return [
+                text
+            ]
+        }
+
+        return TerminalTextWrap.lines(
+            text,
+            width: max(
+                1,
+                width - indent
+            )
+        )
     }
 }
