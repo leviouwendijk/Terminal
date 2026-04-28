@@ -1,5 +1,5 @@
 {
-  "originHash" : "e7d77d8bf4e6f0161f80d5bb53f7e64744e13461709e4ae468ec2ca7b81cb7d8",
+  "originHash" : "4dc1e0ac22496a83d49db14ab12ff9f486a4fc3267ab5e5583b87ad84952a501",
   "pins" : [
     {
       "identity" : "ansi",
@@ -17,6 +17,15 @@
       "state" : {
         "branch" : "master",
         "revision" : "999beddfaa99a991807a4e07e8c0482512c94b69"
+      }
+    },
+    {
+      "identity" : "strings",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/Strings",
+      "state" : {
+        "branch" : "master",
+        "revision" : "86a939d7bbb3e25808f88fbcedcee4069a5a5ae1"
       }
     }
   ],

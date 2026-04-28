@@ -23,6 +23,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/leviouwendijk/ANSI", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Difference", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/Strings", branch: "master"),
 
     ],
     targets: [
@@ -31,6 +32,7 @@ let package = Package(
             dependencies: [
                 .product(name: "ANSI", package: "ANSI"),
                 .product(name: "Difference", package: "Difference"),
+                .product(name: "Strings", package: "Strings"),
             ],
         ),
         .executableTarget(

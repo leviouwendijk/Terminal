@@ -1,6 +1,6 @@
 import Difference
 
-public struct DifferenceTerminalStyle: Sendable, Hashable {
+public struct TerminalDifferenceStyle: Sendable, Hashable {
     public var header: TerminalStyle
     public var equal: TerminalStyle
     public var insert: TerminalStyle
@@ -21,130 +21,118 @@ public struct DifferenceTerminalStyle: Sendable, Hashable {
         self.separator = separator
     }
 
-    public static let `default` = Self()
+    public static let standard = TerminalDifferenceStyle()
 }
 
-public struct DifferenceTerminalRenderOptions: Sendable, Hashable {
+public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
     public var base: DifferenceRenderOptions
-    public var style: DifferenceTerminalStyle
+    public var style: TerminalDifferenceStyle
 
     public init(
         base: DifferenceRenderOptions = .unified,
-        style: DifferenceTerminalStyle = .default
+        style: TerminalDifferenceStyle = .standard
     ) {
         self.base = base
         self.style = style
     }
 }
 
-public extension DifferenceRenderer {
-    enum Terminal {
-        public static func render(
-            _ difference: TextDifference
-        ) -> String {
-            render(
-                difference,
-                options: .init()
-            )
-        }
-
-        public static func render(
-            _ difference: TextDifference,
-            options: DifferenceTerminalRenderOptions = .init()
-        ) -> String {
-            render(
-                DifferenceLayout.make(
-                    difference,
-                    options: options.base
-                ),
-                options: options
-            )
-        }
-
-        public static func render(
-            _ layout: DifferenceLayout,
-            options: DifferenceTerminalRenderOptions = .init()
-        ) -> String {
-            layout.lines
-                .map {
-                    renderLine(
-                        $0,
-                        options: options
-                    )
-                }
-                .joined(
-                    separator: "\n"
-                )
-        }
-
-        public static func print(
-            _ difference: TextDifference,
-            options: DifferenceTerminalRenderOptions = .init()
-        ) {
-            Swift.print(
-                render(
-                    difference,
-                    options: options
-                )
-            )
-        }
-
-        public static func print(
-            _ layout: DifferenceLayout,
-            options: DifferenceTerminalRenderOptions = .init()
-        ) {
-            Swift.print(
-                render(
-                    layout,
-                    options: options
-                )
-            )
-        }
-
-        private static func renderLine(
-            _ line: DifferenceLayout.Line,
-            options: DifferenceTerminalRenderOptions
-        ) -> String {
-            switch line.role {
-            case .headerOld:
-                return options.style.header.apply(
-                    "--- \(line.text)"
-                )
-
-            case .headerNew:
-                return options.style.header.apply(
-                    "+++ \(line.text)"
-                )
-
-            case .equal:
-                return options.style.equal.apply(
-                    options.base.equalPrefix + line.text
-                )
-
-            case .insert:
-                return options.style.insert.apply(
-                    options.base.insertPrefix + line.text
-                )
-
-            case .delete:
-                return options.style.delete.apply(
-                    options.base.deletePrefix + line.text
-                )
-
-            case .separator:
-                return options.style.separator.apply(
-                    line.text
-                )
-            }
-        }
+public enum TerminalDifferenceRenderer {
+    public static func render(
+        _ difference: TextDifference
+    ) -> String {
+        render(
+            difference,
+            options: .init()
+        )
     }
 
-    enum ANSI: DifferenceRendering {
-        public static func render(
-            _ difference: TextDifference
-        ) -> String {
-            Terminal.render(
-                difference
+    public static func render(
+        _ difference: TextDifference,
+        options: TerminalDifferenceRenderOptions = .init()
+    ) -> String {
+        render(
+            DifferenceLayout.make(
+                difference,
+                options: options.base
+            ),
+            options: options
+        )
+    }
+
+    public static func render(
+        _ layout: DifferenceLayout,
+        options: TerminalDifferenceRenderOptions = .init()
+    ) -> String {
+        layout.lines
+            .map {
+                renderLine(
+                    $0,
+                    options: options
+                )
+            }
+            .joined(
+                separator: "\n"
+            )
+    }
+
+    public static func print(
+        _ difference: TextDifference,
+        options: TerminalDifferenceRenderOptions = .init()
+    ) {
+        Swift.print(
+            render(
+                difference,
+                options: options
+            )
+        )
+    }
+
+    public static func print(
+        _ layout: DifferenceLayout,
+        options: TerminalDifferenceRenderOptions = .init()
+    ) {
+        Swift.print(
+            render(
+                layout,
+                options: options
+            )
+        )
+    }
+
+    private static func renderLine(
+        _ line: DifferenceLayout.Line,
+        options: TerminalDifferenceRenderOptions
+    ) -> String {
+        switch line.role {
+        case .headerOld:
+            return options.style.header.apply(
+                "--- \(line.text)"
+            )
+
+        case .headerNew:
+            return options.style.header.apply(
+                "+++ \(line.text)"
+            )
+
+        case .equal:
+            return options.style.equal.apply(
+                options.base.equalPrefix + line.text
+            )
+
+        case .insert:
+            return options.style.insert.apply(
+                options.base.insertPrefix + line.text
+            )
+
+        case .delete:
+            return options.style.delete.apply(
+                options.base.deletePrefix + line.text
+            )
+
+        case .separator:
+            return options.style.separator.apply(
+                line.text
             )
         }
     }
