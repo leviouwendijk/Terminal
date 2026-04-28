@@ -36,6 +36,19 @@ public struct TerminalTheme: Sendable, Hashable {
 
     public static let standard = TerminalTheme()
 
+    public static let agentic = TerminalTheme(
+        title: .init(.bold, .brightCyan),
+        heading: .init(.bold, .brightCyan),
+        label: .init(.brightBlack),
+        value: .none,
+        caption: .init(.brightBlack),
+        success: .init(.green),
+        warning: .init(.yellow),
+        failure: .init(.red),
+        cursor: .init(.bold, .brightCyan),
+        disabled: .init(.dim)
+    )
+
     public static let plain = TerminalTheme(
         title: .none,
         heading: .none,
