@@ -103,7 +103,9 @@ public actor TerminalLiveStatusLine {
     private let stream: TerminalStream
     private let startedAt: Date
     private let limitSeconds: TimeInterval?
+    private let leadingLines: [String]
     private let refreshIntervalNanoseconds: UInt64
+    private let hidesCursor: Bool
     private let renderer: Renderer
 
     private var task: Task<Void, Never>?
@@ -111,13 +113,17 @@ public actor TerminalLiveStatusLine {
     public init(
         stream: TerminalStream = .standardError,
         limitSeconds: TimeInterval? = nil,
+        leadingLines: [String] = [],
         refreshIntervalNanoseconds: UInt64 = 50_000_000,
+        hidesCursor: Bool = true,
         renderer: @escaping Renderer
     ) {
         self.stream = stream
         self.startedAt = Date()
         self.limitSeconds = limitSeconds
+        self.leadingLines = leadingLines
         self.refreshIntervalNanoseconds = refreshIntervalNanoseconds
+        self.hidesCursor = hidesCursor
         self.renderer = renderer
     }
 
@@ -132,8 +138,21 @@ public actor TerminalLiveStatusLine {
         let refreshIntervalNanoseconds = self.refreshIntervalNanoseconds
         let renderer = self.renderer
 
-        Terminal.hideCursor(
-            on: stream
+        if hidesCursor {
+            Terminal.hideCursor(
+                on: stream
+            )
+        }
+
+        for line in leadingLines {
+            Terminal.write(
+                line + "\n",
+                to: stream
+            )
+        }
+
+        Terminal.flush(
+            stream
         )
 
         task = Task.detached {
@@ -149,8 +168,11 @@ public actor TerminalLiveStatusLine {
                     on: stream
                 )
                 Terminal.write(
-                    renderer(
-                        frame
+                    Self.singleVisibleLine(
+                        renderer(
+                            frame
+                        ),
+                        stream: stream
                     ),
                     to: stream
                 )
@@ -177,16 +199,68 @@ public actor TerminalLiveStatusLine {
 
         if let finalLine {
             Terminal.write(
-                finalLine + "\n",
+                Self.singleVisibleLine(
+                    finalLine,
+                    stream: stream
+                ) + "\n",
+                to: stream
+            )
+        } else {
+            Terminal.write(
+                "\n",
                 to: stream
             )
         }
 
-        Terminal.showCursor(
-            on: stream
-        )
+        if hidesCursor {
+            Terminal.showCursor(
+                on: stream
+            )
+        }
+
         Terminal.flush(
             stream
         )
+    }
+}
+
+private extension TerminalLiveStatusLine {
+    static func singleVisibleLine(
+        _ value: String,
+        stream: TerminalStream
+    ) -> String {
+        let normalized = value
+            .replacingOccurrences(
+                of: "\r\n",
+                with: " "
+            )
+            .replacingOccurrences(
+                of: "\n",
+                with: " "
+            )
+            .replacingOccurrences(
+                of: "\r",
+                with: " "
+            )
+
+        let width = max(
+            1,
+            Terminal.size(
+                for: stream
+            ).columns - 1
+        )
+
+        guard normalized.count > width else {
+            return normalized
+        }
+
+        return String(
+            normalized.prefix(
+                max(
+                    1,
+                    width - 1
+                )
+            )
+        ) + "…"
     }
 }
