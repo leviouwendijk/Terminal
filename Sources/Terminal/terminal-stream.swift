@@ -18,6 +18,18 @@ public enum TerminalStream: Sendable, Codable, Hashable {
 public extension Terminal {
     @inline(__always)
     static func write(
+        _ data: Data,
+        to stream: TerminalStream = .standardOutput
+    ) {
+        stream.fileHandle.write(
+            data
+        )
+    }
+}
+
+public extension Terminal {
+    @inline(__always)
+    static func write(
         _ string: String,
         to stream: TerminalStream = .standardOutput
     ) {
