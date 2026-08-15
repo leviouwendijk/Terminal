@@ -41,9 +41,5 @@ let package = Package(
                 "Terminal"
             ]
         ),
-        // .testTarget(
-        //     name: "TerminalTests",
-        //     dependencies: ["Terminal"]
-        // ),
     ]
 )

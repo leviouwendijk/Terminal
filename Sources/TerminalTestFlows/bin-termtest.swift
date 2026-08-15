@@ -8,6 +8,7 @@ enum TerminalTestCommand: String {
     case menuColor = "menu-color"
     case menuChain = "menu-chain"
     case listReview = "list-review"
+    case graph
     case help
 }
 
@@ -43,12 +44,15 @@ struct TerminalTest {
             case .listReview:
                 try TerminalInteractiveSmoke.runReviewListProbe()
 
+            case .graph:
+                try TerminalRelationshipGraphSmoke.run()
+
             case .help:
                 printUsage()
             }
         } catch {
             Terminal.write(
-                "terminaltest failed: \(error)\n",
+                "termtest failed: \(error)\n",
                 to: .standardError
             )
             exit(1)
@@ -58,16 +62,17 @@ struct TerminalTest {
     private static func printUsage() {
         Terminal.write(
             """
-            terminaltest
+            termtest
 
             Usage:
-                swift run terminaltest keys
-                swift run terminaltest list
-                swift run terminaltest menu
-                swift run terminaltest menu-color
-                swift run terminaltest menu-chain
-                swift run terminaltest list-review
-                swift run terminaltest help
+                swift run termtest keys
+                swift run termtest list
+                swift run termtest menu
+                swift run termtest menu-color
+                swift run termtest menu-chain
+                swift run termtest list-review
+                swift run termtest graph
+                swift run termtest help
 
             Commands:
                 keys          Show decoded keys until Esc, Ctrl-C, or Ctrl-D.
@@ -76,6 +81,7 @@ struct TerminalTest {
                 menu-color    Open a styled menu with colored final callback output.
                 menu-chain    Pick an action, then optionally pick a follow-up.
                 list-review   Multi-select review list with colored collapsed summary.
+                graph         Render an input/output relationship graph probe.
                 help          Show this help text.
 
             Notes:
