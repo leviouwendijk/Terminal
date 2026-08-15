@@ -155,7 +155,9 @@ public struct TerminalInteractiveMenu<Item: Sendable, ID: Hashable & Sendable>: 
         self.summaryRenderer = summary
     }
 
-    public func run() throws -> TerminalInteractiveMenuResult<Item, ID> {
+    public func run(
+        initialID: ID? = nil
+    ) throws -> TerminalInteractiveMenuResult<Item, ID> {
         let summaryAdapter: TerminalInteractiveList<Item, ID>.SummaryRenderer?
 
         if let summaryRenderer {
@@ -190,7 +192,9 @@ public struct TerminalInteractiveMenu<Item: Sendable, ID: Hashable & Sendable>: 
             summary: summaryAdapter
         )
 
-        let result = try list.run()
+        let result = try list.run(
+            initialCurrentID: initialID
+        )
 
         return Self.menuResult(
             from: result,

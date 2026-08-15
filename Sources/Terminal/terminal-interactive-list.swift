@@ -149,7 +149,8 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
     }
 
     public func run(
-        initialSelection: Set<ID> = []
+        initialSelection: Set<ID> = [],
+        initialCurrentID: ID? = nil
     ) throws -> TerminalInteractiveListResult<Item, ID> {
         let session = try TerminalSession(
             options: TerminalSession.Options(
@@ -194,7 +195,9 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
         let reader = TerminalKeyReader()
         var navigator = TerminalListNavigator(
             count: items.count,
-            selectedIndex: firstEnabledIndex() ?? 0,
+            selectedIndex: initialCurrentIndex(
+                for: initialCurrentID
+            ),
             wrapMode: configuration.wrapMode
         )
         var selection = TerminalSelectionSet<ID>(
@@ -215,19 +218,25 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
 
             let key = reader.readKey()
 
-            switch key {
-            case .up, .control("P"):
+            if key.isVerticalPrevious {
                 moveSelection(
                     navigator: &navigator,
                     direction: -1
                 )
 
-            case .down, .control("N"):
+                continue
+            }
+
+            if key.isVerticalNext {
                 moveSelection(
                     navigator: &navigator,
                     direction: 1
                 )
 
+                continue
+            }
+
+            switch key {
             case .space, .controlSpace:
                 toggleCurrent(
                     navigator: navigator,
@@ -261,6 +270,23 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
                 break
             }
         }
+    }
+
+    private func initialCurrentIndex(
+        for id: ID?
+    ) -> Int {
+        if let id,
+           let index = items.firstIndex(
+            where: { item in
+                idProvider(item) == id
+                    && enabledProvider(item)
+            }
+           ) {
+            return index
+        }
+
+        return firstEnabledIndex()
+            ?? 0
     }
 
     private func firstEnabledIndex() -> Int? {

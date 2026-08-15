@@ -8,6 +8,8 @@ enum TerminalTestCommand: String {
     case menuColor = "menu-color"
     case menuChain = "menu-chain"
     case listReview = "list-review"
+    case navigation
+    case choice
     case graph
     case help
 }
@@ -44,6 +46,12 @@ struct TerminalTest {
             case .listReview:
                 try TerminalInteractiveSmoke.runReviewListProbe()
 
+            case .navigation:
+                try TerminalNavigationSmoke.run()
+
+            case .choice:
+                try TerminalChoiceSmoke.run()
+
             case .graph:
                 try TerminalRelationshipGraphSmoke.run()
 
@@ -71,6 +79,8 @@ struct TerminalTest {
                 swift run termtest menu-color
                 swift run termtest menu-chain
                 swift run termtest list-review
+                swift run termtest navigation
+                swift run termtest choice
                 swift run termtest graph
                 swift run termtest help
 
@@ -81,6 +91,8 @@ struct TerminalTest {
                 menu-color    Open a styled menu with colored final callback output.
                 menu-chain    Pick an action, then optionally pick a follow-up.
                 list-review   Multi-select review list with colored collapsed summary.
+                navigation    Verify shared navigation defaults.
+                choice        Probe the high-level default-aware choice interface.
                 graph         Render an input/output relationship graph probe.
                 help          Show this help text.
 

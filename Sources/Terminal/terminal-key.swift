@@ -82,26 +82,6 @@ public enum TerminalKey: Sendable, Codable, Hashable, CustomStringConvertible {
         }
     }
 
-    public var isVerticalPrevious: Bool {
-        switch self {
-        case .up, .control("P"):
-            return true
-
-        default:
-            return false
-        }
-    }
-
-    public var isVerticalNext: Bool {
-        switch self {
-        case .down, .control("N"):
-            return true
-
-        default:
-            return false
-        }
-    }
-
     public var isExitLike: Bool {
         switch self {
         case .escape, .control("C"), .control("D"):

@@ -101,7 +101,7 @@ enum TerminalInteractiveSmoke {
             Existing view above the inline menu.
 
             The menu below allows exactly one picked option. There is no toggle
-            state. Move with Ctrl-P/Ctrl-N or arrows, then press Enter to pick.
+            state. Move with Ctrl-P/Ctrl-N, arrows, or k/j, then press Enter to pick.
 
             """,
             to: .standardError
@@ -111,7 +111,7 @@ enum TerminalInteractiveSmoke {
             items: approvalItems(),
             configuration: .inline(
                 title: "Terminal inline menu probe",
-                instructions: "Ctrl-P/up and Ctrl-N/down move. Enter picks. q/Esc exits.",
+                instructions: "Ctrl-P/Ctrl-N, ↑/↓, or k/j move. Enter picks. q/Esc exits.",
                 wrapMode: .wrap,
                 outputStream: .standardError,
                 completionPresentation: .leaveSummary
@@ -157,7 +157,7 @@ enum TerminalInteractiveSmoke {
             items: approvalItems(),
             configuration: .inline(
                 title: "Styled approval menu",
-                instructions: "Move with Ctrl-P/Ctrl-N or arrows. Enter picks. q/Esc exits.",
+                instructions: "Move with Ctrl-P/Ctrl-N, ↑/↓, or k/j. Enter picks. q/Esc exits.",
                 wrapMode: .wrap,
                 outputStream: .standardError,
                 completionPresentation: .leaveSummary
