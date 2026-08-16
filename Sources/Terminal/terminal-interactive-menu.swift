@@ -125,6 +125,58 @@ public enum TerminalInteractiveMenuResult<Item: Sendable, ID: Hashable & Sendabl
     }
 }
 
+
+public enum TerminalInteractiveMenuStatefulResult<
+    Item: Sendable,
+    ID: Hashable & Sendable
+>:
+    Sendable
+{
+    case picked(
+        item: Item,
+        id: ID
+    )
+
+    case cancelled(
+        current: Item?,
+        currentID: ID?
+    )
+
+    public var currentID: ID? {
+        switch self {
+        case .picked(
+            _,
+            let id
+        ):
+            return id
+
+        case .cancelled(
+            _,
+            let currentID
+        ):
+            return currentID
+        }
+    }
+
+    public var legacyResult:
+        TerminalInteractiveMenuResult<Item, ID>
+    {
+        switch self {
+        case .picked(
+            let item,
+            let id
+        ):
+            return .picked(
+                item: item,
+                id: id
+            )
+
+        case .cancelled:
+            return .cancelled
+        }
+    }
+}
+
 public struct TerminalInteractiveMenu<Item: Sendable, ID: Hashable & Sendable>: Sendable {
     public typealias IDProvider = @Sendable (Item) -> ID
     public typealias EnabledProvider = @Sendable (Item) -> Bool
@@ -158,6 +210,18 @@ public struct TerminalInteractiveMenu<Item: Sendable, ID: Hashable & Sendable>: 
     public func run(
         initialID: ID? = nil
     ) throws -> TerminalInteractiveMenuResult<Item, ID> {
+        try runRetainingState(
+            initialID: initialID
+        )
+        .legacyResult
+    }
+
+    public func runRetainingState(
+        initialID: ID? = nil
+    ) throws -> TerminalInteractiveMenuStatefulResult<
+        Item,
+        ID
+    > {
         let summaryAdapter: TerminalInteractiveList<Item, ID>.SummaryRenderer?
 
         if let summaryRenderer {
@@ -192,14 +256,58 @@ public struct TerminalInteractiveMenu<Item: Sendable, ID: Hashable & Sendable>: 
             summary: summaryAdapter
         )
 
-        let result = try list.run(
+        let result = try list.runRetainingState(
             initialCurrentID: initialID
         )
 
-        return Self.menuResult(
-            from: result,
-            idProvider: idProvider
+        return Self.statefulMenuResult(
+            from: result
         )
+    }
+
+    private static func statefulMenuResult(
+        from result:
+            TerminalInteractiveListStatefulResult<
+                Item,
+                ID
+            >
+    ) -> TerminalInteractiveMenuStatefulResult<
+        Item,
+        ID
+    > {
+        switch result {
+        case .accepted(
+            let current,
+            let currentID,
+            _,
+            _
+        ):
+            guard
+                let current,
+                let currentID
+            else {
+                return .cancelled(
+                    current: current,
+                    currentID: currentID
+                )
+            }
+
+            return .picked(
+                item: current,
+                id: currentID
+            )
+
+        case .cancelled(
+            let current,
+            let currentID,
+            _,
+            _
+        ):
+            return .cancelled(
+                current: current,
+                currentID: currentID
+            )
+        }
     }
 
     private static func menuResult(

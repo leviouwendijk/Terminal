@@ -10,6 +10,7 @@ enum TerminalTestCommand: String {
     case listReview = "list-review"
     case navigation
     case choice
+    case choiceState = "choice-state"
     case graph
     case help
 }
@@ -52,6 +53,9 @@ struct TerminalTest {
             case .choice:
                 try TerminalChoiceSmoke.run()
 
+            case .choiceState:
+                try TerminalChoiceSmoke.runStateful()
+
             case .graph:
                 try TerminalRelationshipGraphSmoke.run()
 
@@ -93,6 +97,7 @@ struct TerminalTest {
                 list-review   Multi-select review list with colored collapsed summary.
                 navigation    Verify shared navigation defaults.
                 choice        Probe the high-level default-aware choice interface.
+                choice-state  Probe semantic cursor retention on pick/cancel.
                 graph         Render an input/output relationship graph probe.
                 help          Show this help text.
 

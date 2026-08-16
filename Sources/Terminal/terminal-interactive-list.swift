@@ -118,6 +118,69 @@ public enum TerminalInteractiveListResult<Item: Sendable, ID: Hashable & Sendabl
     }
 }
 
+
+public enum TerminalInteractiveListStatefulResult<
+    Item: Sendable,
+    ID: Hashable & Sendable
+>:
+    Sendable
+{
+    case accepted(
+        current: Item?,
+        currentID: ID?,
+        selected: [Item],
+        selectedIDs: [ID]
+    )
+
+    case cancelled(
+        current: Item?,
+        currentID: ID?,
+        selected: [Item],
+        selectedIDs: [ID]
+    )
+
+    public var currentID: ID? {
+        switch self {
+        case .accepted(
+            _,
+            let currentID,
+            _,
+            _
+        ):
+            return currentID
+
+        case .cancelled(
+            _,
+            let currentID,
+            _,
+            _
+        ):
+            return currentID
+        }
+    }
+
+    public var legacyResult:
+        TerminalInteractiveListResult<Item, ID>
+    {
+        switch self {
+        case .accepted(
+            let current,
+            _,
+            let selected,
+            let selectedIDs
+        ):
+            return .accepted(
+                current: current,
+                selected: selected,
+                selectedIDs: selectedIDs
+            )
+
+        case .cancelled:
+            return .cancelled
+        }
+    }
+}
+
 public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: Sendable {
     public typealias IDProvider = @Sendable (Item) -> ID
     public typealias EnabledProvider = @Sendable (Item) -> Bool
@@ -152,6 +215,17 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
         initialSelection: Set<ID> = [],
         initialCurrentID: ID? = nil
     ) throws -> TerminalInteractiveListResult<Item, ID> {
+        try runRetainingState(
+            initialSelection: initialSelection,
+            initialCurrentID: initialCurrentID
+        )
+        .legacyResult
+    }
+
+    public func runRetainingState(
+        initialSelection: Set<ID> = [],
+        initialCurrentID: ID? = nil
+    ) throws -> TerminalInteractiveListStatefulResult<Item, ID> {
         let session = try TerminalSession(
             options: TerminalSession.Options(
                 useAlternateScreen: configuration.useAlternateScreen,
@@ -182,10 +256,19 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
                 )
             )
 
-            let result = TerminalInteractiveListResult<Item, ID>.cancelled
+            let result =
+                TerminalInteractiveListStatefulResult<
+                    Item,
+                    ID
+                >.cancelled(
+                    current: nil,
+                    currentID: nil,
+                    selected: [],
+                    selectedIDs: []
+                )
 
             renderer.finish(
-                result: result,
+                result: result.legacyResult,
                 summary: summaryRenderer
             )
 
@@ -244,23 +327,28 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
                 )
 
             case .enter:
-                let result = acceptedResult(
-                    navigator: navigator,
-                    selection: selection
-                )
+                let result =
+                    statefulAcceptedResult(
+                        navigator: navigator,
+                        selection: selection
+                    )
 
                 renderer.finish(
-                    result: result,
+                    result: result.legacyResult,
                     summary: summaryRenderer
                 )
 
                 return result
 
             case .escape, .control("C"), .control("D"), .char("q"):
-                let result = TerminalInteractiveListResult<Item, ID>.cancelled
+                let result =
+                    statefulCancelledResult(
+                        navigator: navigator,
+                        selection: selection
+                    )
 
                 renderer.finish(
-                    result: result,
+                    result: result.legacyResult,
                     summary: summaryRenderer
                 )
 
@@ -351,6 +439,86 @@ public struct TerminalInteractiveList<Item: Sendable, ID: Hashable & Sendable>: 
                 id
             )
         }
+    }
+
+    private func statefulAcceptedResult(
+        navigator: TerminalListNavigator,
+        selection: TerminalSelectionSet<ID>
+    ) -> TerminalInteractiveListStatefulResult<
+        Item,
+        ID
+    > {
+        switch acceptedResult(
+            navigator: navigator,
+            selection: selection
+        ) {
+        case .accepted(
+            let current,
+            let selected,
+            let selectedIDs
+        ):
+            return .accepted(
+                current: current,
+                currentID:
+                    current.map(
+                        idProvider
+                    ),
+                selected: selected,
+                selectedIDs: selectedIDs
+            )
+
+        case .cancelled:
+            return statefulCancelledResult(
+                navigator: navigator,
+                selection: selection
+            )
+        }
+    }
+
+    private func statefulCancelledResult(
+        navigator: TerminalListNavigator,
+        selection: TerminalSelectionSet<ID>
+    ) -> TerminalInteractiveListStatefulResult<
+        Item,
+        ID
+    > {
+        let current = currentItem(
+            navigator: navigator
+        )
+
+        return .cancelled(
+            current: current,
+            currentID:
+                current.map(
+                    idProvider
+                ),
+            selected:
+                selectedItems(
+                    selection: selection
+                ),
+            selectedIDs:
+                selectedIDs(
+                    selection: selection
+                )
+        )
+    }
+
+    private func currentItem(
+        navigator: TerminalListNavigator
+    ) -> Item? {
+        guard
+            let index = navigator.selection,
+            items.indices.contains(
+                index
+            ),
+            enabledProvider(
+                items[index]
+            )
+        else {
+            return nil
+        }
+
+        return items[index]
     }
 
     private func acceptedResult(

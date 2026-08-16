@@ -1,3 +1,41 @@
+public enum TerminalChoiceResult<
+    ID: Hashable & Sendable
+>:
+    Sendable
+{
+    case picked(ID)
+
+    case cancelled(
+        current: ID?
+    )
+
+    public var currentID: ID? {
+        switch self {
+        case .picked(
+            let id
+        ):
+            return id
+
+        case .cancelled(
+            let current
+        ):
+            return current
+        }
+    }
+
+    public var pickedID: ID? {
+        switch self {
+        case .picked(
+            let id
+        ):
+            return id
+
+        case .cancelled:
+            return nil
+        }
+    }
+}
+
 public extension Terminal {
     static func choose<
         ID: Hashable & Sendable
@@ -9,12 +47,34 @@ public extension Terminal {
             TerminalNavigationDefaults.verticalInstructions,
         stream: TerminalStream = .standardError
     ) throws -> ID? {
+        try chooseResult(
+            title,
+            choices: choices,
+            default: defaultID,
+            instructions: instructions,
+            stream: stream
+        )
+        .pickedID
+    }
+
+    static func chooseResult<
+        ID: Hashable & Sendable
+    >(
+        _ title: String,
+        choices: [TerminalMenuItem<ID>],
+        default defaultID: ID? = nil,
+        instructions: String =
+            TerminalNavigationDefaults.verticalInstructions,
+        stream: TerminalStream = .standardError
+    ) throws -> TerminalChoiceResult<ID> {
         let enabled = choices.filter(
             \.isEnabled
         )
 
         guard let firstEnabled = enabled.first else {
-            return nil
+            return .cancelled(
+                current: nil
+            )
         }
 
         let resolvedDefault: ID
@@ -31,11 +91,21 @@ public extension Terminal {
         }
 
         guard isInteractive else {
-            return chooseLineFallback(
+            let selected = chooseLineFallback(
                 title,
                 choices: enabled,
                 default: resolvedDefault,
                 stream: stream
+            )
+
+            if let selected {
+                return .picked(
+                    selected
+                )
+            }
+
+            return .cancelled(
+                current: resolvedDefault
             )
         }
 
@@ -70,14 +140,24 @@ public extension Terminal {
             }
         )
 
-        switch try menu.run(
+        switch try menu.runRetainingState(
             initialID: resolvedDefault
         ) {
-        case .picked(_, let id):
-            return id
+        case .picked(
+            _,
+            let id
+        ):
+            return .picked(
+                id
+            )
 
-        case .cancelled:
-            return nil
+        case .cancelled(
+            _,
+            let currentID
+        ):
+            return .cancelled(
+                current: currentID
+            )
         }
     }
 
