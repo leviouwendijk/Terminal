@@ -62,6 +62,7 @@ public final class TerminalSession: @unchecked Sendable {
     private let inputFileDescriptor: Int32
     private var savedAttributes: termios?
     private var previousInterruptAction: sigaction?
+    private var interruptStateID: UInt64?
     private var isActive: Bool = false
     #endif
 
@@ -122,7 +123,14 @@ public final class TerminalSession: @unchecked Sendable {
             )
         }
 
-        _terminalSessionInterruptState.clear()
+        if let interruptStateID {
+            _terminalSessionInterruptState.remove(
+                interruptStateID
+            )
+
+            self.interruptStateID = nil
+        }
+
         isActive = false
         #endif
     }
@@ -145,11 +153,13 @@ public final class TerminalSession: @unchecked Sendable {
         }
 
         savedAttributes = attributes
-        _terminalSessionInterruptState.store(
-            attributes,
-            showCursorOnInterrupt: options.hideCursor,
-            leaveAlternateScreenOnInterrupt: options.useAlternateScreen
-        )
+        interruptStateID =
+            _terminalSessionInterruptState.store(
+                attributes,
+                showCursorOnInterrupt: options.hideCursor,
+                leaveAlternateScreenOnInterrupt:
+                    options.useAlternateScreen
+            )
 
         if options.useAlternateScreen {
             Terminal.enterAlternateScreen(
@@ -234,37 +244,75 @@ public final class TerminalSession: @unchecked Sendable {
 
 #if canImport(Darwin)
 private final class TerminalSessionInterruptState: @unchecked Sendable {
-    private var hasAttributes: Bool = false
-    private var savedAttributes = termios()
-    private var showCursorOnInterrupt: Bool = false
-    private var leaveAlternateScreenOnInterrupt: Bool = false
+    private struct Entry {
+        let id: UInt64
+        let savedAttributes: termios
+        let showCursorOnInterrupt: Bool
+        let leaveAlternateScreenOnInterrupt: Bool
+    }
 
+    private var entries: [Entry] = []
+    private var nextID: UInt64 = 1
+
+    @discardableResult
     func store(
         _ attributes: termios,
         showCursorOnInterrupt: Bool,
         leaveAlternateScreenOnInterrupt: Bool
-    ) {
-        self.savedAttributes = attributes
-        self.hasAttributes = true
-        self.showCursorOnInterrupt = showCursorOnInterrupt
-        self.leaveAlternateScreenOnInterrupt = leaveAlternateScreenOnInterrupt
+    ) -> UInt64 {
+        let id = nextID
+
+        nextID &+= 1
+
+        if nextID == 0 {
+            nextID = 1
+        }
+
+        entries.append(
+            Entry(
+                id: id,
+                savedAttributes: attributes,
+                showCursorOnInterrupt:
+                    showCursorOnInterrupt,
+                leaveAlternateScreenOnInterrupt:
+                    leaveAlternateScreenOnInterrupt
+            )
+        )
+
+        return id
     }
 
-    func clear() {
-        hasAttributes = false
-        showCursorOnInterrupt = false
-        leaveAlternateScreenOnInterrupt = false
+    func remove(
+        _ id: UInt64
+    ) {
+        entries.removeAll {
+            $0.id == id
+        }
     }
 
     func restoreForInterrupt() {
-        if hasAttributes {
-            var attributes = savedAttributes
-            tcsetattr(
-                STDIN_FILENO,
-                TCSANOW,
-                &attributes
-            )
+        guard let outermost = entries.first else {
+            return
         }
+
+        var attributes =
+            outermost.savedAttributes
+
+        tcsetattr(
+            STDIN_FILENO,
+            TCSANOW,
+            &attributes
+        )
+
+        let showCursorOnInterrupt =
+            entries.contains {
+                $0.showCursorOnInterrupt
+            }
+
+        let leaveAlternateScreenOnInterrupt =
+            entries.contains {
+                $0.leaveAlternateScreenOnInterrupt
+            }
 
         var sequence = ""
 
