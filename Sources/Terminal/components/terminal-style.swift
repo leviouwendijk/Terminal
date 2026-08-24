@@ -29,6 +29,14 @@ public struct TerminalStyle: Sendable, Hashable {
         return "\(prefix)\(text)\(ANSIColor.reset.rawValue)"
     }
 
+    public func apply(
+        lines: [String]
+    ) -> [String] {
+        lines.map {
+            apply($0)
+        }
+    }
+
     public static let none = TerminalStyle()
     public static let bold = TerminalStyle(.bold)
     public static let dim = TerminalStyle(.dim)

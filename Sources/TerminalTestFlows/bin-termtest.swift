@@ -9,6 +9,7 @@ enum TerminalTestCommand: String {
     case menuChain = "menu-chain"
     case listReview = "list-review"
     case navigation
+    case styleLines = "style-lines"
     case choice
     case choiceState = "choice-state"
     case graph
@@ -50,6 +51,9 @@ struct TerminalTest {
             case .navigation:
                 try TerminalNavigationSmoke.run()
 
+            case .styleLines:
+                try TerminalStyleLinesSmoke.run()
+
             case .choice:
                 try TerminalChoiceSmoke.run()
 
@@ -84,6 +88,7 @@ struct TerminalTest {
                 swift run termtest menu-chain
                 swift run termtest list-review
                 swift run termtest navigation
+                swift run termtest style-lines
                 swift run termtest choice
                 swift run termtest graph
                 swift run termtest help
@@ -96,6 +101,7 @@ struct TerminalTest {
                 menu-chain    Pick an action, then optionally pick a follow-up.
                 list-review   Multi-select review list with colored collapsed summary.
                 navigation    Verify shared navigation defaults.
+                style-lines   Verify independently styled/reset terminal rows.
                 choice        Probe the high-level default-aware choice interface.
                 choice-state  Probe semantic cursor retention on pick/cancel.
                 graph         Render an input/output relationship graph probe.
