@@ -9,6 +9,7 @@ enum TerminalTestCommand: String {
     case menuChain = "menu-chain"
     case listReview = "list-review"
     case navigation
+    case stdinTerminal = "stdin-terminal"
     case styleLines = "style-lines"
     case choice
     case choiceState = "choice-state"
@@ -47,6 +48,20 @@ struct TerminalTest {
 
             case .listReview:
                 try TerminalInteractiveSmoke.runReviewListProbe()
+
+            case .stdinTerminal:
+                let connected = Terminal.io.stdin.reconnect(
+                    to: .terminal
+                )
+
+                guard connected else {
+                    throw TerminalStandardInputSmoke.Failure
+                        .terminalUnavailable
+                }
+
+                print(
+                    "standard input reconnected to terminal"
+                )
 
             case .navigation:
                 try TerminalNavigationSmoke.run()
@@ -88,6 +103,7 @@ struct TerminalTest {
                 swift run termtest menu-chain
                 swift run termtest list-review
                 swift run termtest navigation
+                swift run termtest stdin-terminal
                 swift run termtest style-lines
                 swift run termtest choice
                 swift run termtest graph
@@ -100,8 +116,9 @@ struct TerminalTest {
                 menu-color    Open a styled menu with colored final callback output.
                 menu-chain    Pick an action, then optionally pick a follow-up.
                 list-review   Multi-select review list with colored collapsed summary.
-                navigation    Verify shared navigation defaults.
-                style-lines   Verify independently styled/reset terminal rows.
+                navigation     Verify shared navigation defaults.
+                stdin-terminal Reconnect standard input to the controlling terminal.
+                style-lines    Verify independently styled/reset terminal rows.
                 choice        Probe the high-level default-aware choice interface.
                 choice-state  Probe semantic cursor retention on pick/cancel.
                 graph         Render an input/output relationship graph probe.
