@@ -157,6 +157,19 @@ public enum TerminalDifferenceRenderer {
         case .separator:
             return style.separator
 
+        case .endOfFile:
+            switch segment.component {
+            case .lineNumbers:
+                return style.lineNumbers
+
+            case .border:
+                return style.border
+
+            case .marker,
+                 .text:
+                return style.separator
+            }
+
         case .equal,
              .insert,
              .delete:
@@ -195,7 +208,8 @@ public enum TerminalDifferenceRenderer {
              .headerNew:
             return style.header
 
-        case .separator:
+        case .separator,
+             .endOfFile:
             return style.separator
         }
     }

@@ -38,7 +38,11 @@ let package = Package(
         .executableTarget(
             name: "TerminalTestFlows",
             dependencies: [
-                "Terminal"
+                "Terminal",
+                .product(
+                    name: "Difference",
+                    package: "Difference"
+                ),
             ]
         ),
     ]

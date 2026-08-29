@@ -28,6 +28,7 @@ public final class TerminalSession: @unchecked Sendable {
         public var useAlternateScreen: Bool
         public var hideCursor: Bool
         public var useRawMode: Bool
+        public var useBracketedPaste: Bool
         public var restoreOnInterrupt: Bool
         public var outputStream: TerminalStream
 
@@ -35,12 +36,14 @@ public final class TerminalSession: @unchecked Sendable {
             useAlternateScreen: Bool = false,
             hideCursor: Bool = false,
             useRawMode: Bool = false,
+            useBracketedPaste: Bool = false,
             restoreOnInterrupt: Bool = true,
             outputStream: TerminalStream = .standardError
         ) {
             self.useAlternateScreen = useAlternateScreen
             self.hideCursor = hideCursor
             self.useRawMode = useRawMode
+            self.useBracketedPaste = useBracketedPaste
             self.restoreOnInterrupt = restoreOnInterrupt
             self.outputStream = outputStream
         }
@@ -51,6 +54,7 @@ public final class TerminalSession: @unchecked Sendable {
             useAlternateScreen: true,
             hideCursor: true,
             useRawMode: true,
+            useBracketedPaste: true,
             restoreOnInterrupt: true,
             outputStream: .standardError
         )
@@ -95,6 +99,12 @@ public final class TerminalSession: @unchecked Sendable {
                 inputFileDescriptor,
                 TCSANOW,
                 &restoredAttributes
+            )
+        }
+
+        if options.useBracketedPaste {
+            Terminal.disableBracketedPaste(
+                on: options.outputStream
             )
         }
 
@@ -158,12 +168,20 @@ public final class TerminalSession: @unchecked Sendable {
                 attributes,
                 showCursorOnInterrupt: options.hideCursor,
                 leaveAlternateScreenOnInterrupt:
-                    options.useAlternateScreen
+                    options.useAlternateScreen,
+                disableBracketedPasteOnInterrupt:
+                    options.useBracketedPaste
             )
 
         if options.useAlternateScreen {
             Terminal.enterAlternateScreen(
                 to: options.outputStream
+            )
+        }
+
+        if options.useBracketedPaste {
+            Terminal.enableBracketedPaste(
+                on: options.outputStream
             )
         }
 
@@ -176,7 +194,11 @@ public final class TerminalSession: @unchecked Sendable {
         if options.useRawMode {
             var interactiveAttributes = attributes
 
-            interactiveAttributes.c_lflag &= ~tcflag_t(ECHO | ICANON)
+            interactiveAttributes.c_lflag &= ~tcflag_t(
+                ECHO
+                    | ICANON
+                    | IEXTEN
+            )
             interactiveAttributes.c_lflag |= tcflag_t(ISIG)
 
             interactiveAttributes.c_iflag &= ~tcflag_t(IXON)
@@ -249,6 +271,7 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
         let savedAttributes: termios
         let showCursorOnInterrupt: Bool
         let leaveAlternateScreenOnInterrupt: Bool
+        let disableBracketedPasteOnInterrupt: Bool
     }
 
     private var entries: [Entry] = []
@@ -258,7 +281,8 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
     func store(
         _ attributes: termios,
         showCursorOnInterrupt: Bool,
-        leaveAlternateScreenOnInterrupt: Bool
+        leaveAlternateScreenOnInterrupt: Bool,
+        disableBracketedPasteOnInterrupt: Bool
     ) -> UInt64 {
         let id = nextID
 
@@ -275,7 +299,9 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
                 showCursorOnInterrupt:
                     showCursorOnInterrupt,
                 leaveAlternateScreenOnInterrupt:
-                    leaveAlternateScreenOnInterrupt
+                    leaveAlternateScreenOnInterrupt,
+                disableBracketedPasteOnInterrupt:
+                    disableBracketedPasteOnInterrupt
             )
         )
 
@@ -313,8 +339,16 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
             entries.contains {
                 $0.leaveAlternateScreenOnInterrupt
             }
+        let disableBracketedPasteOnInterrupt =
+            entries.contains {
+                $0.disableBracketedPasteOnInterrupt
+            }
 
         var sequence = ""
+
+        if disableBracketedPasteOnInterrupt {
+            sequence += "\u{001B}[?2004l"
+        }
 
         if showCursorOnInterrupt {
             sequence += "\u{001B}[?25h"

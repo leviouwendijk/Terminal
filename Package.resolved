@@ -1,5 +1,5 @@
 {
-  "originHash" : "f5488e06ce0700c8c325cbafc30508be069177a159e224b33221202b7335319d",
+  "originHash" : "624527b458fbde5dce603b3994ef81d0f23ac007806bfc92bf6bbaf6841fdd53",
   "pins" : [
     {
       "identity" : "ansi",
@@ -16,7 +16,7 @@
       "location" : "https://github.com/leviouwendijk/Difference",
       "state" : {
         "branch" : "master",
-        "revision" : "3fa70acbc0b96bbaf5a5021e362b48e399ca6c1e"
+        "revision" : "7d295238c789f009fd720f3cf5ca8e730068c0c5"
       }
     },
     {

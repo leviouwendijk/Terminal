@@ -9,6 +9,10 @@ enum TerminalTestCommand: String {
     case menuChain = "menu-chain"
     case listReview = "list-review"
     case navigation
+    case tuiFoundation = "tui-foundation"
+    case frame
+    case shell
+    case overlay
     case stdinTerminal = "stdin-terminal"
     case styleLines = "style-lines"
     case choice
@@ -66,6 +70,18 @@ struct TerminalTest {
             case .navigation:
                 try TerminalNavigationSmoke.run()
 
+            case .tuiFoundation:
+                try TerminalTUIFoundationSmoke.run()
+
+            case .frame:
+                try TerminalFrameSmoke.run()
+
+            case .shell:
+                try TerminalShellSmoke.run()
+
+            case .overlay:
+                try TerminalOverlaySmoke.run()
+
             case .styleLines:
                 try TerminalStyleLinesSmoke.run()
 
@@ -103,6 +119,10 @@ struct TerminalTest {
                 swift run termtest menu-chain
                 swift run termtest list-review
                 swift run termtest navigation
+                swift run termtest tui-foundation
+                swift run termtest frame
+                swift run termtest shell
+                swift run termtest overlay
                 swift run termtest stdin-terminal
                 swift run termtest style-lines
                 swift run termtest choice
@@ -117,6 +137,10 @@ struct TerminalTest {
                 menu-chain    Pick an action, then optionally pick a follow-up.
                 list-review   Multi-select review list with colored collapsed summary.
                 navigation     Verify shared navigation defaults.
+                tui-foundation Verify reusable TUI state, display, frame, and layout primitives.
+                frame          Inspect persistent dirty-row frame composition interactively.
+                shell          Run the persistent interactive shell composition laboratory.
+                overlay        Inspect centered modal and trailing side-sheet focus capture.
                 stdin-terminal Reconnect standard input to the controlling terminal.
                 style-lines    Verify independently styled/reset terminal rows.
                 choice        Probe the high-level default-aware choice interface.

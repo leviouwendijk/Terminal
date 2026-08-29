@@ -24,20 +24,272 @@ public struct TerminalKeyReader: Sendable {
     #endif
 
     public func readKey() -> TerminalKey {
+        readEvent().legacyKey
+    }
+
+    public func readEvent() -> TerminalInputEvent {
         #if canImport(Darwin)
         guard let firstByte = readByteBlocking() else {
-            return .unknown([])
+            return .key(
+                .unknown([])
+            )
         }
 
-        return decode(
+        return decodeEvent(
             firstByte: firstByte
         )
         #else
-        return .unknown([])
+        return .key(
+            .unknown([])
+        )
         #endif
     }
 
     #if canImport(Darwin)
+    private func decodeEvent(
+        firstByte: UInt8
+    ) -> TerminalInputEvent {
+        if firstByte == 0x1B {
+            return readEscapeEvent()
+        }
+
+        if firstByte >= 0x80 {
+            return .key(
+                readUTF8Character(
+                    firstByte: firstByte
+                )
+            )
+        }
+
+        return .key(
+            decode(
+                firstByte: firstByte
+            )
+        )
+    }
+
+    private func readEscapeEvent() -> TerminalInputEvent {
+        guard let secondByte = readByteWithRawTimeout() else {
+            return .key(
+                .escape
+            )
+        }
+
+        switch secondByte {
+        case 0x5B:
+            return readCSIEvent()
+
+        case 0x4F:
+            return .key(
+                readSS3Sequence()
+            )
+
+        default:
+            return .key(
+                .unknown(
+                    [
+                        0x1B,
+                        secondByte,
+                    ]
+                )
+            )
+        }
+    }
+
+    private func readCSIEvent() -> TerminalInputEvent {
+        guard let sequence = readCSIBytes() else {
+            return .key(
+                .unknown(
+                    [
+                        0x1B,
+                        0x5B,
+                    ]
+                )
+            )
+        }
+
+        if sequence == Array(
+            "200~".utf8
+        ) {
+            return .paste(
+                readBracketedPaste()
+            )
+        }
+
+        return .key(
+            decodeCSIBytes(
+                sequence
+            )
+        )
+    }
+
+    private func readCSIBytes() -> [UInt8]? {
+        var bytes: [UInt8] = []
+
+        for _ in 0..<32 {
+            guard let byte = readByteWithRawTimeout() else {
+                return nil
+            }
+
+            bytes.append(
+                byte
+            )
+
+            if byte >= 0x40,
+               byte <= 0x7E {
+                return bytes
+            }
+        }
+
+        return bytes
+    }
+
+    private func decodeCSIBytes(
+        _ bytes: [UInt8]
+    ) -> TerminalKey {
+        switch String(
+            decoding: bytes,
+            as: UTF8.self
+        ) {
+        case "A":
+            return .up
+
+        case "B":
+            return .down
+
+        case "C":
+            return .right
+
+        case "D":
+            return .left
+
+        case "H",
+             "1~",
+             "7~":
+            return .home
+
+        case "F",
+             "4~",
+             "8~":
+            return .end
+
+        case "2~":
+            return .insert
+
+        case "3~":
+            return .delete
+
+        case "5~":
+            return .pageUp
+
+        case "6~":
+            return .pageDown
+
+        default:
+            return .unknown(
+                [
+                    0x1B,
+                    0x5B,
+                ] + bytes
+            )
+        }
+    }
+
+    private func readUTF8Character(
+        firstByte: UInt8
+    ) -> TerminalKey {
+        let byteCount: Int
+
+        switch firstByte {
+        case 0xC2...0xDF:
+            byteCount = 2
+
+        case 0xE0...0xEF:
+            byteCount = 3
+
+        case 0xF0...0xF4:
+            byteCount = 4
+
+        default:
+            return .unknown(
+                [
+                    firstByte,
+                ]
+            )
+        }
+
+        var bytes = [
+            firstByte,
+        ]
+
+        for _ in 1..<byteCount {
+            guard let byte = readByteWithRawTimeout() else {
+                return .unknown(
+                    bytes
+                )
+            }
+
+            bytes.append(
+                byte
+            )
+
+            guard byte & 0xC0 == 0x80 else {
+                return .unknown(
+                    bytes
+                )
+            }
+        }
+
+        guard let text = String(
+            bytes: bytes,
+            encoding: .utf8
+        ) else {
+            return .unknown(
+                bytes
+            )
+        }
+
+        return .char(
+            text
+        )
+    }
+
+    private func readBracketedPaste() -> String {
+        let terminator = Array(
+            "\u{001B}[201~".utf8
+        )
+        var content: [UInt8] = []
+        var pending: [UInt8] = []
+
+        while let byte = readByteBlocking() {
+            pending.append(
+                byte
+            )
+
+            while !terminator.starts(
+                with: pending
+            ) {
+                content.append(
+                    pending.removeFirst()
+                )
+            }
+
+            if pending == terminator {
+                pending.removeAll()
+                break
+            }
+        }
+
+        content.append(
+            contentsOf: pending
+        )
+
+        return String(
+            decoding: content,
+            as: UTF8.self
+        )
+    }
+
     private func decode(
         firstByte: UInt8
     ) -> TerminalKey {
@@ -259,14 +511,48 @@ public struct TerminalKeyReader: Sendable {
 
     private func readByteBlocking() -> UInt8? {
         while true {
-            if let byte = readByteWithRawTimeout() {
+            if let byte = readByte() {
                 return byte
+            }
+
+            guard errno == EINTR else {
+                return nil
             }
         }
     }
 
     private func readByteWithRawTimeout() -> UInt8? {
+        var descriptor = pollfd(
+            fd: fileDescriptor,
+            events: Int16(POLLIN),
+            revents: 0
+        )
+
+        while true {
+            let status = poll(
+                &descriptor,
+                1,
+                25
+            )
+
+            if status > 0 {
+                return readByte()
+            }
+
+            if status == 0 {
+                return nil
+            }
+
+            guard errno == EINTR else {
+                return nil
+            }
+        }
+    }
+
+    private func readByte() -> UInt8? {
         var byte: UInt8 = 0
+        errno = 0
+
         let count = read(
             fileDescriptor,
             &byte,

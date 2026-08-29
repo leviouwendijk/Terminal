@@ -136,7 +136,15 @@ public struct TerminalBlock: Sendable, Hashable {
         if let body,
            !body.isEmpty {
             lines.append("")
-            lines.append(body)
+            lines.append(
+                contentsOf: TerminalTextWrap.lines(
+                    body,
+                    width: max(
+                        1,
+                        width
+                    )
+                )
+            )
         }
 
         appendBlockSpacing(
