@@ -2,6 +2,8 @@ import Difference
 
 public struct TerminalDifferenceStyle: Sendable, Hashable {
     public var header: TerminalStyle
+    public var lineNumbers: TerminalStyle
+    public var border: TerminalStyle
     public var equal: TerminalStyle
     public var insert: TerminalStyle
     public var delete: TerminalStyle
@@ -9,12 +11,16 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
 
     public init(
         header: TerminalStyle = .init(.brightBlack),
+        lineNumbers: TerminalStyle = .init(.brightBlack),
+        border: TerminalStyle = .init(.brightBlack),
         equal: TerminalStyle = .dim,
         insert: TerminalStyle = .init(.green),
         delete: TerminalStyle = .init(.red),
         separator: TerminalStyle = .init(.brightBlack)
     ) {
         self.header = header
+        self.lineNumbers = lineNumbers
+        self.border = border
         self.equal = equal
         self.insert = insert
         self.delete = delete
@@ -64,16 +70,13 @@ public enum TerminalDifferenceRenderer {
         _ layout: DifferenceLayout,
         options: TerminalDifferenceRenderOptions = .init()
     ) -> String {
-        layout.lines
-            .map {
-                renderLine(
-                    $0,
-                    options: options
-                )
-            }
-            .joined(
-                separator: "\n"
-            )
+        render(
+            DifferenceRenderPlan.make(
+                layout,
+                options: options.base
+            ),
+            style: options.style
+        )
     }
 
     public static func print(
@@ -100,40 +103,100 @@ public enum TerminalDifferenceRenderer {
         )
     }
 
-    private static func renderLine(
-        _ line: DifferenceLayout.Line,
-        options: TerminalDifferenceRenderOptions
+    private static func render(
+        _ plan: DifferenceRenderPlan,
+        style: TerminalDifferenceStyle
     ) -> String {
-        switch line.role {
-        case .headerOld:
-            return options.style.header.apply(
-                "--- \(line.text)"
+        plan.lines
+            .map {
+                renderLine(
+                    $0,
+                    style: style
+                )
+            }
+            .joined(
+                separator: "\n"
             )
+    }
 
-        case .headerNew:
-            return options.style.header.apply(
-                "+++ \(line.text)"
-            )
+    private static func renderLine(
+        _ line: DifferenceRenderPlan.Line,
+        style: TerminalDifferenceStyle
+    ) -> String {
+        let spacing = String(
+            repeating: " ",
+            count: line.componentSpacing
+        )
 
-        case .equal:
-            return options.style.equal.apply(
-                options.base.equalPrefix + line.text
+        return line.segments
+            .map {
+                segmentStyle(
+                    $0,
+                    role: line.role,
+                    style: style
+                )
+                .apply(
+                    $0.text
+                )
+            }
+            .joined(
+                separator: spacing
             )
+    }
 
-        case .insert:
-            return options.style.insert.apply(
-                options.base.insertPrefix + line.text
-            )
-
-        case .delete:
-            return options.style.delete.apply(
-                options.base.deletePrefix + line.text
-            )
+    private static func segmentStyle(
+        _ segment: DifferenceRenderPlan.Segment,
+        role: DifferenceLayout.Role,
+        style: TerminalDifferenceStyle
+    ) -> TerminalStyle {
+        switch role {
+        case .headerOld,
+             .headerNew:
+            return style.header
 
         case .separator:
-            return options.style.separator.apply(
-                line.text
-            )
+            return style.separator
+
+        case .equal,
+             .insert,
+             .delete:
+            switch segment.component {
+            case .lineNumbers:
+                return style.lineNumbers
+
+            case .border:
+                return style.border
+
+            case .marker,
+                 .text:
+                return contentStyle(
+                    for: role,
+                    style: style
+                )
+            }
+        }
+    }
+
+    private static func contentStyle(
+        for role: DifferenceLayout.Role,
+        style: TerminalDifferenceStyle
+    ) -> TerminalStyle {
+        switch role {
+        case .equal:
+            return style.equal
+
+        case .insert:
+            return style.insert
+
+        case .delete:
+            return style.delete
+
+        case .headerOld,
+             .headerNew:
+            return style.header
+
+        case .separator:
+            return style.separator
         }
     }
 }
