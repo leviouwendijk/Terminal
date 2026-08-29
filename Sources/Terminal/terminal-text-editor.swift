@@ -18,6 +18,8 @@ public struct TerminalTextEditor:
     public private(set) var viewport: TerminalViewport
     public private(set) var selectionAnchor: Int?
 
+    private var layoutCache: LayoutCache?
+
     public init(
         text: String = "",
         cursorOffset: Int? = nil,
@@ -35,6 +37,34 @@ public struct TerminalTextEditor:
             visibleRows: visibleRows
         )
         self.selectionAnchor = nil
+        self.layoutCache = nil
+    }
+
+    public static func == (
+        lhs: TerminalTextEditor,
+        rhs: TerminalTextEditor
+    ) -> Bool {
+        lhs.buffer == rhs.buffer
+            && lhs.interaction == rhs.interaction
+            && lhs.viewport == rhs.viewport
+            && lhs.selectionAnchor == rhs.selectionAnchor
+    }
+
+    public func hash(
+        into hasher: inout Hasher
+    ) {
+        hasher.combine(
+            buffer
+        )
+        hasher.combine(
+            interaction
+        )
+        hasher.combine(
+            viewport
+        )
+        hasher.combine(
+            selectionAnchor
+        )
     }
 
     public var mode: TerminalInteractionMode {
@@ -187,8 +217,7 @@ public struct TerminalTextEditor:
             return
         }
 
-        let layout = TerminalTextLayout(
-            text: buffer.text,
+        let layout = layout(
             columns: region.columns
         )
         let cursor = layout.position(
@@ -253,7 +282,8 @@ public struct TerminalTextEditor:
                         0,
                         region.columns - 1
                     )
-                )
+                ),
+            shape: mode == .insert ? .bar : .block
         )
     }
 
@@ -425,6 +455,34 @@ public struct TerminalTextEditor:
         )
     }
 
+    private mutating func layout(
+        columns: Int
+    ) -> TerminalTextLayout {
+        let columns = max(
+            1,
+            columns
+        )
+
+        if let layoutCache,
+           layoutCache.columns == columns,
+           layoutCache.text == buffer.text {
+            return layoutCache.layout
+        }
+
+        let layout = TerminalTextLayout(
+            text: buffer.text,
+            columns: columns
+        )
+
+        layoutCache = LayoutCache(
+            text: buffer.text,
+            columns: columns,
+            layout: layout
+        )
+
+        return layout
+    }
+
     private func renderedContent(
         _ row: TerminalTextLayoutRow,
         selectionStyle: TerminalStyle
@@ -475,5 +533,13 @@ public struct TerminalTextEditor:
                 selected
             )
             + after
+    }
+
+    private struct LayoutCache:
+        Sendable
+    {
+        var text: String
+        var columns: Int
+        var layout: TerminalTextLayout
     }
 }

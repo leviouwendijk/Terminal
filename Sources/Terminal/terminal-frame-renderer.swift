@@ -80,10 +80,11 @@ public struct TerminalFrameRenderer:
             return "\u{001B}[?25l"
         }
 
-        return cursorPosition(
-            line: cursor.row + 1,
-            column: cursor.column + 1
-        )
+        return cursor.shape.escapeSequence
+            + cursorPosition(
+                line: cursor.row + 1,
+                column: cursor.column + 1
+            )
             + "\u{001B}[?25h"
     }
 

@@ -12,6 +12,8 @@ enum TerminalTextEditorFoundationSmoke {
         case unexpectedDelete
         case unexpectedPaste
         case unexpectedRender
+        case unexpectedReflow
+        case unexpectedReplacementRender
     }
 
     static func run() throws {
@@ -187,9 +189,89 @@ enum TerminalTextEditorFoundationSmoke {
         ).first?.content == "def",
         frame.cursor == TerminalFrameCursor(
             row: 1,
-            column: 1
+            column: 1,
+            shape: .block
         ) else {
             throw Failure.unexpectedRender
+        }
+
+        var repeatedFrame = TerminalFrame(
+            rows: 2,
+            columns: 3
+        )
+
+        editor.render(
+            into: &repeatedFrame,
+            in: TerminalRegion(
+                rows: 2,
+                columns: 3
+            )
+        )
+
+        guard repeatedFrame.spans(
+            inRow: 0
+        ).first?.content == "abc",
+        repeatedFrame.spans(
+            inRow: 1
+        ).first?.content == "def",
+        repeatedFrame.cursor == TerminalFrameCursor(
+            row: 1,
+            column: 1,
+            shape: .block
+        ) else {
+            throw Failure.unexpectedRender
+        }
+
+        var widerFrame = TerminalFrame(
+            rows: 1,
+            columns: 6
+        )
+
+        editor.render(
+            into: &widerFrame,
+            in: TerminalRegion(
+                rows: 1,
+                columns: 6
+            )
+        )
+
+        guard widerFrame.spans(
+            inRow: 0
+        ).first?.content == "abcdef",
+        widerFrame.cursor == TerminalFrameCursor(
+            row: 0,
+            column: 4,
+            shape: .block
+        ) else {
+            throw Failure.unexpectedReflow
+        }
+
+        editor.replace(
+            with: "xy"
+        )
+
+        var replacementFrame = TerminalFrame(
+            rows: 1,
+            columns: 6
+        )
+
+        editor.render(
+            into: &replacementFrame,
+            in: TerminalRegion(
+                rows: 1,
+                columns: 6
+            )
+        )
+
+        guard replacementFrame.spans(
+            inRow: 0
+        ).first?.content == "xy",
+        replacementFrame.cursor == TerminalFrameCursor(
+            row: 0,
+            column: 2,
+            shape: .block
+        ) else {
+            throw Failure.unexpectedReplacementRender
         }
     }
 }

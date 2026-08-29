@@ -68,10 +68,12 @@ public struct TerminalFrameCursor:
 {
     public var row: Int
     public var column: Int
+    public var shape: TerminalCursorShape
 
     public init(
         row: Int,
-        column: Int
+        column: Int,
+        shape: TerminalCursorShape = .automatic
     ) {
         self.row = max(
             0,
@@ -81,6 +83,7 @@ public struct TerminalFrameCursor:
             0,
             column
         )
+        self.shape = shape
     }
 }
 
@@ -178,7 +181,8 @@ public struct TerminalFrame:
 
     public mutating func placeCursor(
         row: Int,
-        column: Int
+        column: Int,
+        shape: TerminalCursorShape = .automatic
     ) {
         cursor = TerminalFrameCursor(
             row: min(
@@ -200,7 +204,8 @@ public struct TerminalFrame:
                     0,
                     columns - 1
                 )
-            )
+            ),
+            shape: shape
         )
     }
 

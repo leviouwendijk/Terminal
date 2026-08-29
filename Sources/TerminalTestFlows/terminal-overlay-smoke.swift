@@ -7,9 +7,44 @@ private enum TerminalOverlaySmokeFocus:
     Hashable
 {
     case base
+    case transcript
+    case navigation
+    case timeline
+    case messageInspector
     case approval
     case inspector
     case editor
+}
+
+private enum TerminalOverlaySmokeDestination:
+    CaseIterable,
+    Sendable,
+    Hashable
+{
+    case current
+    case previous
+    case runs
+    case tools
+    case tasks
+
+    var title: String {
+        switch self {
+        case .current:
+            return "current"
+
+        case .previous:
+            return "previous"
+
+        case .runs:
+            return "runs"
+
+        case .tools:
+            return "tools"
+
+        case .tasks:
+            return "tasks"
+        }
+    }
 }
 
 private struct TerminalOverlaySmokePaste:
@@ -46,12 +81,140 @@ private struct TerminalOverlaySmokePaste:
     }
 }
 
+private enum TerminalOverlaySmokeContent:
+    Sendable,
+    Hashable
+{
+    case pastedText(TerminalOverlaySmokePaste)
+
+    var summary: String {
+        switch self {
+        case .pastedText(let paste):
+            return "paste · \(paste.summary)"
+        }
+    }
+
+    var pastedTextValue: TerminalOverlaySmokePaste? {
+        switch self {
+        case .pastedText(let paste):
+            return paste
+        }
+    }
+
+    func renderedLines(
+        width: Int
+    ) -> [String] {
+        switch self {
+        case .pastedText(let paste):
+            return TerminalTextLayout(
+                text: paste.text,
+                columns: max(
+                    1,
+                    width
+                )
+            ).rows.map(\.content)
+        }
+    }
+}
+
+private enum TerminalOverlaySmokeTimelineStep:
+    CaseIterable,
+    Sendable,
+    Hashable
+{
+    case mutateFiles
+    case swiftBuild
+    case artest
+    case verifyBuild
+    case gitDiff
+
+    var title: String {
+        switch self {
+        case .mutateFiles:
+            return "mutate_files"
+
+        case .swiftBuild,
+             .verifyBuild:
+            return "swift_build"
+
+        case .artest:
+            return "artest"
+
+        case .gitDiff:
+            return "git_diff"
+        }
+    }
+
+    var detail: String? {
+        switch self {
+        case .mutateFiles:
+            return "Terminal/Sources/Terminal/terminal-timeline.swift"
+
+        case .swiftBuild:
+            return "Terminal"
+
+        case .artest:
+            return "current"
+
+        case .verifyBuild:
+            return "Terminal verification"
+
+        case .gitDiff:
+            return "working tree"
+        }
+    }
+
+    var state: TerminalTimelineItemState {
+        switch self {
+        case .mutateFiles,
+             .swiftBuild:
+            return .completed
+
+        case .artest:
+            return .active
+
+        case .verifyBuild,
+             .gitDiff:
+            return .pending
+        }
+    }
+
+    var stateLabel: String {
+        switch state {
+        case .pending:
+            return "pending"
+
+        case .active:
+            return "active"
+
+        case .completed:
+            return "completed"
+
+        case .failed:
+            return "failed"
+
+        case .skipped:
+            return "skipped"
+        }
+    }
+
+    var timelineItem: TerminalTimelineItem<Self> {
+        TerminalTimelineItem(
+            id: self,
+            title: title,
+            detail: detail,
+            state: state
+        )
+    }
+}
+
 private enum TerminalOverlaySmokeInspector:
     Sendable,
     Hashable
 {
     case details
     case difference
+    case timelineStep(TerminalOverlaySmokeTimelineStep)
 
     var title: String {
         switch self {
@@ -60,6 +223,9 @@ private enum TerminalOverlaySmokeInspector:
 
         case .difference:
             return "staged diff"
+
+        case .timelineStep(let step):
+            return step.title
         }
     }
 }
@@ -91,10 +257,30 @@ private enum TerminalOverlaySmokeApprovalChoice:
 }
 
 private struct TerminalOverlaySmokeMessage:
-    Sendable
+    Sendable,
+    Hashable
 {
+    var id: Int
     var role: String
     var body: String
+    var contents: [TerminalOverlaySmokeContent]
+
+    init(
+        id: Int,
+        role: String,
+        body: String,
+        contents: [TerminalOverlaySmokeContent] = []
+    ) {
+        self.id = id
+        self.role = role
+        self.body = body
+        self.contents = contents
+    }
+}
+
+private struct TerminalOverlaySmokeTranscriptLayout {
+    var lines: [String]
+    var messageRows: [Int: Range<Int>]
 }
 
 enum TerminalOverlaySmoke {
@@ -122,11 +308,29 @@ enum TerminalOverlaySmoke {
         var focus = TerminalFocusStack(
             TerminalOverlaySmokeFocus.base
         )
+        var navigation = TerminalListControl(
+            items: TerminalOverlaySmokeDestination.allCases,
+            currentID: TerminalOverlaySmokeDestination.current,
+            id: {
+                $0
+            }
+        )
         var composer = TerminalTextInputControl(
             prompt: "> ",
             placeholder: "type a message..."
         )
-        var pastedText: TerminalOverlaySmokePaste?
+        var timeline = TerminalListControl(
+            items: TerminalOverlaySmokeTimelineStep.allCases,
+            currentID: TerminalOverlaySmokeTimelineStep.swiftBuild,
+            id: {
+                $0
+            }
+        )
+        var timelineDocument = TerminalScrollableDocument(
+            visibleRows: 0
+        )
+        var pendingContents: [TerminalOverlaySmokeContent] = []
+        var editingPendingContentIndex: Int?
         var editor = TerminalTextEditor()
         var approval = TerminalListControl(
             items: approvalItems,
@@ -139,6 +343,11 @@ enum TerminalOverlaySmoke {
             visibleRows: 0,
             followEnd: true
         )
+        var inspectedMessageID: Int?
+        var inspectedContentIndex = 0
+        var messageDocument = TerminalScrollableDocument(
+            visibleRows: 0
+        )
         var inspector: TerminalOverlaySmokeInspector?
         var inspectorDocument = TerminalScrollableDocument(
             visibleRows: 0
@@ -148,14 +357,18 @@ enum TerminalOverlaySmoke {
         )
         var messages = [
             TerminalOverlaySmokeMessage(
+                id: 1,
                 role: "you",
                 body: "Keep the underlying shell alive while transient interfaces appear above it."
             ),
             TerminalOverlaySmokeMessage(
+                id: 2,
                 role: "assistant",
                 body: "The frame can now prove modal focus capture without changing application semantics."
             ),
         ]
+        var selectedMessageID = messages.last?.id
+        var nextMessageID = 3
         var size = Terminal.size(
             for: stream
         )
@@ -165,8 +378,15 @@ enum TerminalOverlaySmoke {
                 frame(
                     size: size,
                     focus: focus,
+                    navigation: navigation,
+                    timeline: timeline,
+                    timelineDocument: &timelineDocument,
                     composer: composer,
-                    pastedText: pastedText,
+                    pendingContents: pendingContents,
+                    selectedMessageID: selectedMessageID,
+                    inspectedMessageID: inspectedMessageID,
+                    inspectedContentIndex: inspectedContentIndex,
+                    messageDocument: &messageDocument,
                     editor: &editor,
                     approval: approval,
                     transcriptDocument: &transcriptDocument,
@@ -213,8 +433,12 @@ enum TerminalOverlaySmoke {
                         }
 
                         if normalized.contains("\n") {
-                            pastedText = TerminalOverlaySmokePaste(
-                                normalized
+                            pendingContents.append(
+                                .pastedText(
+                                    TerminalOverlaySmokePaste(
+                                        normalized
+                                    )
+                                )
                             )
                         } else {
                             _ = composer.handle(
@@ -227,7 +451,11 @@ enum TerminalOverlaySmoke {
                             event
                         )
 
-                    case .approval,
+                    case .transcript,
+                         .navigation,
+                         .timeline,
+                         .messageInspector,
+                         .approval,
                          .inspector:
                         break
                     }
@@ -254,8 +482,25 @@ enum TerminalOverlaySmoke {
                         .approval
                     )
 
+                case .tab:
+                    if navigation.currentID == .current {
+                        if selectedMessageID == nil {
+                            selectedMessageID = messages.last?.id
+                        }
+
+                        focus.replace(
+                            .transcript
+                        )
+                    } else {
+                        focus.replace(
+                            .navigation
+                        )
+                    }
+
                 case .control("E"):
-                    if let pastedText {
+                    if let index = pendingContents.indices.last,
+                       let pastedText = pendingContents[index].pastedTextValue {
+                        editingPendingContentIndex = index
                         editor.replace(
                             with: pastedText.text
                         )
@@ -272,8 +517,8 @@ enum TerminalOverlaySmoke {
                     }
 
                 case .control("X"):
-                    if pastedText != nil {
-                        pastedText = nil
+                    if !pendingContents.isEmpty {
+                        pendingContents.removeLast()
                     } else {
                         _ = composer.handle(
                             key
@@ -297,16 +542,241 @@ enum TerminalOverlaySmoke {
                     )
 
                 case .enter:
-                    submit(
+                    if let submittedMessageID = submit(
                         composer: &composer,
-                        pastedText: &pastedText,
-                        messages: &messages
-                    )
+                        pendingContents: &pendingContents,
+                        messages: &messages,
+                        nextMessageID: &nextMessageID
+                    ) {
+                        selectedMessageID = submittedMessageID
+                        transcriptDocument.moveToEnd()
+                    }
 
                 default:
                     _ = composer.handle(
                         key
                     )
+                }
+
+            case .transcript:
+                switch key {
+                case .control("C"):
+                    return
+
+                case .tab:
+                    focus.replace(
+                        .navigation
+                    )
+
+                case .escape:
+                    focus.replace(
+                        .base
+                    )
+
+                case .up,
+                     .char("k"):
+                    moveSelectedMessage(
+                        by: -1,
+                        messages: messages,
+                        selectedMessageID: &selectedMessageID
+                    )
+
+                case .down,
+                     .char("j"):
+                    moveSelectedMessage(
+                        by: 1,
+                        messages: messages,
+                        selectedMessageID: &selectedMessageID
+                    )
+
+                case .home:
+                    selectedMessageID = messages.first?.id
+
+                case .end:
+                    selectedMessageID = messages.last?.id
+
+                case .enter:
+                    guard let selectedMessageID,
+                          messages.contains(
+                            where: {
+                                $0.id == selectedMessageID
+                            }
+                          ) else {
+                        continue
+                    }
+
+                    inspectedMessageID = selectedMessageID
+                    inspectedContentIndex = 0
+                    messageDocument = TerminalScrollableDocument(
+                        visibleRows: 0
+                    )
+                    focus.push(
+                        .messageInspector
+                    )
+
+                default:
+                    continue
+                }
+
+            case .navigation:
+                if key == .control("C") {
+                    return
+                }
+
+                if key == .tab {
+                    focus.replace(
+                        .base
+                    )
+                } else {
+                    guard let navigationEvent = navigation.handle(
+                        key
+                    ) else {
+                        continue
+                    }
+
+                    switch navigationEvent {
+                    case .currentChanged:
+                        break
+
+                    case .cancelRequested:
+                        focus.replace(
+                            .base
+                        )
+
+                    case .accepted(let destination):
+                        if destination == .current {
+                            if selectedMessageID == nil {
+                                selectedMessageID = messages.last?.id
+                            }
+
+                            focus.replace(
+                                .transcript
+                            )
+                        } else if destination == .runs {
+                            focus.push(
+                                .timeline
+                            )
+                        } else {
+                            focus.replace(
+                                .base
+                            )
+                        }
+                    }
+                }
+
+            case .timeline:
+                if key == .control("C") {
+                    return
+                }
+
+                guard let timelineEvent = timeline.handle(
+                    key
+                ) else {
+                    continue
+                }
+
+                switch timelineEvent {
+                case .currentChanged:
+                    break
+
+                case .cancelRequested:
+                    _ = focus.pop()
+
+                case .accepted(let step):
+                    inspector = .timelineStep(
+                        step
+                    )
+                    inspectorDocument.moveToStart()
+                    inspectorInteraction.setMode(
+                        .normal
+                    )
+                    focus.push(
+                        .inspector
+                    )
+                }
+
+            case .messageInspector:
+                guard let messageID = inspectedMessageID,
+                      let message = messages.first(
+                        where: {
+                            $0.id == messageID
+                        }
+                      ) else {
+                    inspectedMessageID = nil
+                    inspectedContentIndex = 0
+                    _ = focus.pop()
+                    continue
+                }
+
+                switch key {
+                case .control("C"):
+                    return
+
+                case .escape:
+                    inspectedMessageID = nil
+                    inspectedContentIndex = 0
+                    _ = focus.pop()
+
+                case .left,
+                     .char("h"):
+                    guard !message.contents.isEmpty,
+                          inspectedContentIndex > 0 else {
+                        continue
+                    }
+
+                    inspectedContentIndex -= 1
+                    messageDocument.moveToStart()
+
+                case .right,
+                     .char("l"):
+                    guard !message.contents.isEmpty,
+                          inspectedContentIndex < message.contents.count - 1 else {
+                        continue
+                    }
+
+                    inspectedContentIndex += 1
+                    messageDocument.moveToStart()
+
+                case .up,
+                     .char("k"):
+                    _ = messageDocument.handle(
+                        .motion(
+                            .up
+                        )
+                    )
+
+                case .down,
+                     .char("j"):
+                    _ = messageDocument.handle(
+                        .motion(
+                            .down
+                        )
+                    )
+
+                case .pageUp,
+                     .control("U"):
+                    _ = messageDocument.handle(
+                        .motion(
+                            .pageUp
+                        )
+                    )
+
+                case .pageDown,
+                     .control("D"):
+                    _ = messageDocument.handle(
+                        .motion(
+                            .pageDown
+                        )
+                    )
+
+                case .home:
+                    messageDocument.moveToStart()
+
+                case .end:
+                    messageDocument.moveToEnd()
+
+                default:
+                    continue
                 }
 
             case .approval:
@@ -329,19 +799,27 @@ enum TerminalOverlaySmoke {
                     case .approve:
                         messages.append(
                             TerminalOverlaySmokeMessage(
+                                id: nextMessageID,
                                 role: "system",
                                 body: "Approval accepted. Underlying shell state remained intact."
                             )
                         )
+                        nextMessageID += 1
+                        selectedMessageID = messages.last?.id
+                        transcriptDocument.moveToEnd()
                         _ = focus.pop()
 
                     case .deny:
                         messages.append(
                             TerminalOverlaySmokeMessage(
+                                id: nextMessageID,
                                 role: "system",
                                 body: "Approval denied. Underlying shell state remained intact."
                             )
                         )
+                        nextMessageID += 1
+                        selectedMessageID = messages.last?.id
+                        transcriptDocument.moveToEnd()
                         _ = focus.pop()
 
                     case .inspectDetails:
@@ -405,12 +883,22 @@ enum TerminalOverlaySmoke {
                 ) {
                     let text = editor.buffer.text
 
-                    pastedText = text.isEmpty
-                        ? nil
-                        : TerminalOverlaySmokePaste(
-                            text
-                        )
+                    if let index = editingPendingContentIndex,
+                       pendingContents.indices.contains(index) {
+                        if text.isEmpty {
+                            pendingContents.remove(
+                                at: index
+                            )
+                        } else {
+                            pendingContents[index] = .pastedText(
+                                TerminalOverlaySmokePaste(
+                                    text
+                                )
+                            )
+                        }
+                    }
 
+                    editingPendingContentIndex = nil
                     _ = focus.pop()
                 }
             }
@@ -451,56 +939,67 @@ enum TerminalOverlaySmoke {
 
     private static func submit(
         composer: inout TerminalTextInputControl,
-        pastedText: inout TerminalOverlaySmokePaste?,
-        messages: inout [TerminalOverlaySmokeMessage]
-    ) {
+        pendingContents: inout [TerminalOverlaySmokeContent],
+        messages: inout [TerminalOverlaySmokeMessage],
+        nextMessageID: inout Int
+    ) -> Int? {
         let inlineText = composer.input.text
             .trimmingCharacters(
                 in: .whitespacesAndNewlines
             )
-        var sections: [String] = []
 
-        if !inlineText.isEmpty {
-            sections.append(
-                inlineText
-            )
+        guard !inlineText.isEmpty
+            || !pendingContents.isEmpty else {
+            return nil
         }
 
-        if let pastedText,
-           !pastedText.text.isEmpty {
-            sections.append(
-                pastedText.text
-            )
-        }
-
-        guard !sections.isEmpty else {
-            return
-        }
+        let submittedMessageID = nextMessageID
 
         messages.append(
             TerminalOverlaySmokeMessage(
+                id: nextMessageID,
                 role: "you",
-                body: sections.joined(
-                    separator: "\n\n"
-                )
+                body: inlineText,
+                contents: pendingContents
             )
         )
+        nextMessageID += 1
+
         messages.append(
             TerminalOverlaySmokeMessage(
+                id: nextMessageID,
                 role: "assistant",
-                body: "Composer state and transcript mutation remain owned by the base shell."
+                body: "Composer state and retained message content remain owned by the base shell."
             )
         )
+        nextMessageID += 1
 
         composer.clear()
-        pastedText = nil
+        pendingContents.removeAll(
+            keepingCapacity: true
+        )
+
+        return submittedMessageID
     }
 
     private static func frame(
         size: TerminalSize,
         focus: TerminalFocusStack<TerminalOverlaySmokeFocus>,
+        navigation: TerminalListControl<
+            TerminalOverlaySmokeDestination,
+            TerminalOverlaySmokeDestination
+        >,
+        timeline: TerminalListControl<
+            TerminalOverlaySmokeTimelineStep,
+            TerminalOverlaySmokeTimelineStep
+        >,
+        timelineDocument: inout TerminalScrollableDocument,
         composer: TerminalTextInputControl,
-        pastedText: TerminalOverlaySmokePaste?,
+        pendingContents: [TerminalOverlaySmokeContent],
+        selectedMessageID: Int?,
+        inspectedMessageID: Int?,
+        inspectedContentIndex: Int,
+        messageDocument: inout TerminalScrollableDocument,
         editor: inout TerminalTextEditor,
         approval: TerminalListControl<
             ApprovalItem,
@@ -513,10 +1012,21 @@ enum TerminalOverlaySmoke {
     ) -> TerminalFrame {
         var frame = baseFrame(
             size: size,
+            navigation: navigation,
+            timeline: timeline,
+            timelineDocument: &timelineDocument,
             composer: composer,
             composerFocused:
                 focus.current == .base,
-            pastedText: pastedText,
+            transcriptFocused:
+                focus.current == .transcript
+                    || focus.current == .messageInspector,
+            navigationFocused:
+                focus.current == .navigation,
+            timelineFocused:
+                focus.current == .timeline,
+            pendingContents: pendingContents,
+            selectedMessageID: selectedMessageID,
             transcriptDocument: &transcriptDocument,
             messages: messages
         )
@@ -526,8 +1036,27 @@ enum TerminalOverlaySmoke {
         )
 
         switch focus.current {
-        case .base:
+        case .base,
+             .transcript,
+             .navigation,
+             .timeline:
             break
+
+        case .messageInspector:
+            if let inspectedMessageID,
+               let message = messages.first(
+                where: {
+                    $0.id == inspectedMessageID
+                }
+               ) {
+                renderMessageInspector(
+                    message,
+                    contentIndex: inspectedContentIndex,
+                    into: &frame,
+                    in: root,
+                    document: &messageDocument
+                )
+            }
 
         case .approval:
             renderApproval(
@@ -559,9 +1088,22 @@ enum TerminalOverlaySmoke {
 
     private static func baseFrame(
         size: TerminalSize,
+        navigation: TerminalListControl<
+            TerminalOverlaySmokeDestination,
+            TerminalOverlaySmokeDestination
+        >,
+        timeline: TerminalListControl<
+            TerminalOverlaySmokeTimelineStep,
+            TerminalOverlaySmokeTimelineStep
+        >,
+        timelineDocument: inout TerminalScrollableDocument,
         composer: TerminalTextInputControl,
         composerFocused: Bool,
-        pastedText: TerminalOverlaySmokePaste?,
+        transcriptFocused: Bool,
+        navigationFocused: Bool,
+        timelineFocused: Bool,
+        pendingContents: [TerminalOverlaySmokeContent],
+        selectedMessageID: Int?,
         transcriptDocument: inout TerminalScrollableDocument,
         messages: [TerminalOverlaySmokeMessage]
     ) -> TerminalFrame {
@@ -590,6 +1132,8 @@ enum TerminalOverlaySmoke {
         let header = vertical[0]
         let body = vertical[1]
         let footer = vertical[2]
+        let destination = navigation.currentID
+            ?? TerminalOverlaySmokeDestination.current
 
         frame.write(
             [
@@ -619,37 +1163,59 @@ enum TerminalOverlaySmoke {
             spacing: 2
         )
 
-        frame.write(
-            [
-                TerminalStyle.dim.apply(
-                    "sessions"
-                ),
-                TerminalStyle.bold.apply(
-                    "  current"
-                ),
-                "  previous",
-                "",
-                TerminalStyle.dim.apply(
-                    "views"
-                ),
-                "  runs",
-                "  tools",
-                "  tasks",
-            ],
+        renderNavigationRail(
+            navigation: navigation,
+            focused: navigationFocused,
+            into: &frame,
             in: horizontal[0]
         )
 
-        transcriptDocument.update(
-            lines: transcriptLines(
+        switch destination {
+        case .current:
+            let transcriptLayout = transcriptLayout(
                 messages,
-                width: horizontal[1].columns
-            ),
-            visibleRows: horizontal[1].rows
-        )
-        transcriptDocument.render(
-            into: &frame,
-            in: horizontal[1]
-        )
+                width: horizontal[1].columns,
+                selectedMessageID: transcriptFocused
+                    ? selectedMessageID
+                    : nil
+            )
+
+            transcriptDocument.update(
+                lines: transcriptLayout.lines,
+                visibleRows: horizontal[1].rows
+            )
+
+            if transcriptFocused,
+               let selectedMessageID,
+               let selectedRows = transcriptLayout.messageRows[selectedMessageID] {
+                transcriptDocument.reveal(
+                    row: selectedRows.lowerBound,
+                    margin: 1
+                )
+            }
+
+            transcriptDocument.render(
+                into: &frame,
+                in: horizontal[1]
+            )
+
+        case .runs:
+            renderTimeline(
+                timeline: timeline,
+                into: &frame,
+                in: horizontal[1],
+                document: &timelineDocument
+            )
+
+        case .previous,
+             .tools,
+             .tasks:
+            renderDestination(
+                destination,
+                into: &frame,
+                in: horizontal[1]
+            )
+        }
 
         if footer.rows > 0 {
             frame.write(
@@ -682,9 +1248,12 @@ enum TerminalOverlaySmoke {
         }
 
         if footer.rows > 2,
-           let pastedText {
+           let latestContent = pendingContents.last {
+            let label = pendingContents.count == 1
+                ? latestContent.summary
+                : "\(pendingContents.count) contents · latest \(latestContent.summary)"
             let summary = TerminalDisplay.fitted(
-                "paste  \(pastedText.summary)  ctrl-e edit  ctrl-x remove",
+                "\(label)  ctrl-e edit latest  ctrl-x remove latest",
                 columns: footer.columns
             )
 
@@ -704,9 +1273,23 @@ enum TerminalOverlaySmoke {
         }
 
         if footer.rows > 3 {
+            let hint: String
+
+            if navigationFocused {
+                hint = "j/k navigate  enter open  tab/esc composer  ctrl-c exit"
+            } else if timelineFocused {
+                hint = "j/k select step  enter inspect  esc navigation  ctrl-c exit"
+            } else if transcriptFocused {
+                hint = "j/k select message  enter inspect  tab navigation  esc composer"
+            } else if destination == .current {
+                hint = "enter submit  tab transcript  pgup/pgdn scroll  ctrl-o approval  ctrl-c exit"
+            } else {
+                hint = "tab navigation  composer state retained  ctrl-o approval  ctrl-c exit"
+            }
+
             frame.write(
                 TerminalStyle.dim.apply(
-                    "enter submit  pgup/pgdn transcript  ctrl-o approval  ctrl-c exit"
+                    hint
                 ),
                 in: TerminalRegion(
                     top: footer.top + 3,
@@ -720,27 +1303,285 @@ enum TerminalOverlaySmoke {
         return frame
     }
 
-    private static func transcriptLines(
+    private static func renderNavigationRail(
+        navigation: TerminalListControl<
+            TerminalOverlaySmokeDestination,
+            TerminalOverlaySmokeDestination
+        >,
+        focused: Bool,
+        into frame: inout TerminalFrame,
+        in region: TerminalRegion
+    ) {
+        let rows = navigation.rows()
+
+        frame.write(
+            [
+                TerminalStyle.dim.apply(
+                    "sessions"
+                ),
+                navigationLine(
+                    .current,
+                    rows: rows,
+                    focused: focused
+                ),
+                navigationLine(
+                    .previous,
+                    rows: rows,
+                    focused: focused
+                ),
+                "",
+                TerminalStyle.dim.apply(
+                    "views"
+                ),
+                navigationLine(
+                    .runs,
+                    rows: rows,
+                    focused: focused
+                ),
+                navigationLine(
+                    .tools,
+                    rows: rows,
+                    focused: focused
+                ),
+                navigationLine(
+                    .tasks,
+                    rows: rows,
+                    focused: focused
+                ),
+            ],
+            in: region
+        )
+    }
+
+    private static func navigationLine(
+        _ destination: TerminalOverlaySmokeDestination,
+        rows: [
+            TerminalListControlRow<
+                TerminalOverlaySmokeDestination,
+                TerminalOverlaySmokeDestination
+            >
+        ],
+        focused: Bool
+    ) -> String {
+        let line = "  \(destination.title)"
+
+        guard let row = rows.first(
+            where: {
+                $0.id == destination
+            }
+        ),
+              row.isCurrent else {
+            return line
+        }
+
+        if focused {
+            return TerminalStyle(
+                .inverse
+            ).apply(
+                line
+            )
+        }
+
+        return TerminalStyle.bold.apply(
+            line
+        )
+    }
+
+    private static func renderTimeline(
+        timeline: TerminalListControl<
+            TerminalOverlaySmokeTimelineStep,
+            TerminalOverlaySmokeTimelineStep
+        >,
+        into frame: inout TerminalFrame,
+        in region: TerminalRegion,
+        document: inout TerminalScrollableDocument
+    ) {
+        let timelineLayout = TerminalTimeline(
+            items: timeline.items.map(\.timelineItem)
+        ).layout(
+            width: region.columns,
+            selectedID: timeline.currentID
+        )
+        let header = [
+            TerminalStyle.bold.apply(
+                "run detail"
+            ),
+            TerminalStyle.dim.apply(
+                "ToolPlan · suspended at artest"
+            ),
+            "",
+        ]
+        let lines = header + timelineLayout.lines
+
+        document.update(
+            lines: lines,
+            visibleRows: region.rows
+        )
+
+        if let selectedID = timeline.currentID,
+           let selectedRows = timelineLayout.itemRows[selectedID] {
+            document.reveal(
+                row: header.count + selectedRows.lowerBound,
+                margin: 1
+            )
+        }
+
+        document.render(
+            into: &frame,
+            in: region
+        )
+    }
+
+    private static func renderDestination(
+        _ destination: TerminalOverlaySmokeDestination,
+        into frame: inout TerminalFrame,
+        in region: TerminalRegion
+    ) {
+        let lines: [String]
+
+        switch destination {
+        case .current:
+            return
+
+        case .previous:
+            lines = [
+                TerminalStyle.bold.apply(
+                    "previous sessions"
+                ),
+                "",
+                "  terminal composition",
+                "  renderer investigation",
+                "  input foundation",
+                "",
+                TerminalStyle.dim.apply(
+                    "Mock destination; shell and composer state remain mounted."
+                ),
+            ]
+
+        case .runs:
+            return
+
+        case .tools:
+            lines = [
+                TerminalStyle.bold.apply(
+                    "tools"
+                ),
+                "",
+                "  search",
+                "  inspect",
+                "  mutate",
+                "  build",
+                "",
+                TerminalStyle.dim.apply(
+                    "Terminal supplies presentation mechanics, not tool semantics."
+                ),
+            ]
+
+        case .tasks:
+            lines = [
+                TerminalStyle.bold.apply(
+                    "tasks"
+                ),
+                "",
+                "  finish shell composition",
+                "  connect interface semantics",
+                "  connect runtime state",
+                "",
+                TerminalStyle.dim.apply(
+                    "This remains a presentation laboratory."
+                ),
+            ]
+        }
+
+        frame.write(
+            lines,
+            in: region
+        )
+    }
+
+    private static func transcriptLayout(
         _ messages: [TerminalOverlaySmokeMessage],
-        width: Int
-    ) -> [String] {
+        width: Int,
+        selectedMessageID: Int?
+    ) -> TerminalOverlaySmokeTranscriptLayout {
+        let width = max(
+            1,
+            width
+        )
         var lines: [String] = []
+        var messageRows: [Int: Range<Int>] = [:]
 
         for message in messages {
-            lines.append(
-                TerminalStyle.bold.apply(
-                    message.role
-                )
-            )
-            lines.append(
-                contentsOf: TerminalTextWrap.lines(
-                    message.body,
-                    width: max(
-                        1,
-                        width
+            let start = lines.count
+            let isSelected = message.id == selectedMessageID
+
+            if isSelected {
+                lines.append(
+                    TerminalStyle(
+                        .inverse
+                    ).apply(
+                        TerminalDisplay.fitted(
+                            message.role,
+                            columns: width
+                        )
                     )
                 )
-            )
+            } else {
+                lines.append(
+                    TerminalStyle.bold.apply(
+                        message.role
+                    )
+                )
+            }
+
+            if !message.body.isEmpty {
+                for bodyLine in TerminalTextWrap.lines(
+                    message.body,
+                    width: width
+                ) {
+                    if isSelected {
+                        lines.append(
+                            TerminalStyle(
+                                .inverse
+                            ).apply(
+                                TerminalDisplay.fitted(
+                                    bodyLine,
+                                    columns: width
+                                )
+                            )
+                        )
+                    } else {
+                        lines.append(
+                            bodyLine
+                        )
+                    }
+                }
+            }
+
+            for content in message.contents {
+                let summary = "  [\(content.summary)]"
+
+                if isSelected {
+                    lines.append(
+                        TerminalStyle(
+                            .inverse
+                        ).apply(
+                            TerminalDisplay.fitted(
+                                summary,
+                                columns: width
+                            )
+                        )
+                    )
+                } else {
+                    lines.append(
+                        TerminalStyle.dim.apply(
+                            summary
+                        )
+                    )
+                }
+            }
+
+            messageRows[message.id] = start..<lines.count
             lines.append("")
         }
 
@@ -753,7 +1594,40 @@ enum TerminalOverlaySmoke {
             "base frame remains mounted beneath transient surfaces"
         )
 
-        return lines
+        return TerminalOverlaySmokeTranscriptLayout(
+            lines: lines,
+            messageRows: messageRows
+        )
+    }
+
+    private static func moveSelectedMessage(
+        by offset: Int,
+        messages: [TerminalOverlaySmokeMessage],
+        selectedMessageID: inout Int?
+    ) {
+        guard !messages.isEmpty else {
+            selectedMessageID = nil
+            return
+        }
+
+        let currentIndex = selectedMessageID
+            .flatMap {
+                selectedMessageID in
+
+                messages.firstIndex {
+                    $0.id == selectedMessageID
+                }
+            }
+            ?? messages.count - 1
+        let nextIndex = min(
+            messages.count - 1,
+            max(
+                0,
+                currentIndex + offset
+            )
+        )
+
+        selectedMessageID = messages[nextIndex].id
     }
 
     private static func renderApproval(
@@ -827,6 +1701,161 @@ enum TerminalOverlaySmoke {
             lines,
             in: content
         )
+    }
+
+    private static func renderMessageInspector(
+        _ message: TerminalOverlaySmokeMessage,
+        contentIndex: Int,
+        into frame: inout TerminalFrame,
+        in root: TerminalRegion,
+        document: inout TerminalScrollableDocument
+    ) {
+        let contentCount = message.contents.count
+        let resolvedContentIndex = contentCount == 0
+            ? 0
+            : min(
+                contentCount - 1,
+                max(
+                    0,
+                    contentIndex
+                )
+            )
+        let currentContent = contentCount == 0
+            ? nil
+            : message.contents[resolvedContentIndex]
+        let title: String
+
+        if contentCount > 0 {
+            title = "message \(message.id) · \(message.role) · content \(resolvedContentIndex + 1)/\(contentCount)"
+        } else {
+            title = "message \(message.id) · \(message.role)"
+        }
+
+        let overlay = TerminalOverlay(
+            placement: .centered(
+                columns: 86,
+                rows: 28
+            ),
+            outerInsets: TerminalInsets(
+                vertical: 1,
+                horizontal: 2
+            )
+        )
+        let content = overlay.render(
+            into: &frame,
+            in: root,
+            title: title
+        )
+
+        guard !content.isEmpty else {
+            return
+        }
+
+        var lines: [String] = []
+
+        if !message.body.isEmpty {
+            lines.append(
+                TerminalStyle.bold.apply(
+                    "message"
+                )
+            )
+            lines.append(
+                contentsOf: TerminalTextWrap.lines(
+                    message.body,
+                    width: max(
+                        1,
+                        content.columns
+                    )
+                )
+            )
+
+            if currentContent != nil {
+                lines.append("")
+            }
+        }
+
+        if let currentContent {
+            lines.append(
+                TerminalStyle.bold.apply(
+                    "content"
+                )
+            )
+            lines.append(
+                contentsOf: currentContent.renderedLines(
+                    width: content.columns
+                )
+            )
+        }
+
+        if lines.isEmpty {
+            lines.append("")
+        }
+
+        let documentRows = max(
+            0,
+            content.rows - 2
+        )
+        let documentRegion = TerminalRegion(
+            top: content.top,
+            leading: content.leading,
+            rows: documentRows,
+            columns: content.columns
+        )
+
+        document.update(
+            lines: lines,
+            visibleRows: documentRows
+        )
+        document.render(
+            into: &frame,
+            in: documentRegion
+        )
+
+        if content.rows > 1 {
+            let status: String
+
+            if let currentContent {
+                status = currentContent.summary
+                    + " · "
+                    + "\(resolvedContentIndex + 1)/\(contentCount)"
+            } else {
+                status = "message body"
+            }
+
+            frame.write(
+                TerminalStyle.dim.apply(
+                    status
+                ),
+                in: TerminalRegion(
+                    top: content.bottom - 2,
+                    leading: content.leading,
+                    rows: 1,
+                    columns: content.columns
+                )
+            )
+        }
+
+        if content.rows > 0 {
+            let instructions: String
+
+            if contentCount > 1 {
+                instructions = "h/l content  j/k scroll  pgup/pgdn page  home/end ends  esc back"
+            } else {
+                instructions = "j/k scroll  pgup/pgdn page  home/end ends  esc back"
+            }
+
+            frame.write(
+                TerminalStyle.dim.apply(
+                    instructions
+                ),
+                in: TerminalRegion(
+                    top: content.bottom - 1,
+                    leading: content.leading,
+                    rows: 1,
+                    columns: content.columns
+                )
+            )
+        }
     }
 
     private static func renderEditor(
@@ -963,7 +1992,52 @@ enum TerminalOverlaySmoke {
 
         case .difference:
             return differenceInspectorLines
+
+        case .timelineStep(let step):
+            return timelineStepInspectorLines(
+                step,
+                width: width
+            )
         }
+    }
+
+    private static func timelineStepInspectorLines(
+        _ step: TerminalOverlaySmokeTimelineStep,
+        width: Int
+    ) -> [String] {
+        let block = TerminalBlock(
+            title: "step",
+            fields: [
+                TerminalField(
+                    "tool",
+                    step.title
+                ),
+                TerminalField(
+                    "state",
+                    step.stateLabel
+                ),
+                TerminalField(
+                    "target",
+                    step.detail ?? "none"
+                ),
+            ],
+            body: "Selection and execution state remain independent; this detail surface is the existing generic inspector overlay.",
+            layout: TerminalBlockLayout(
+                fieldIndent: 0,
+                labelWidth: .minimum(6),
+                labelValueSpacing: 3,
+                blankLinesAfter: 0
+            )
+        )
+
+        return block.render(
+            width: width
+        )
+        .split(
+            separator: "\n",
+            omittingEmptySubsequences: false
+        )
+        .map(String.init)
     }
 
     private static func detailsInspectorLines(

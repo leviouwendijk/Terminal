@@ -20,6 +20,7 @@ enum TerminalTUIFoundationSmoke {
 
     static func run() throws {
         try runViewportProbe()
+        try runScrollableDocumentRevealProbe()
         try runTextInputProbe()
         try runDisplayProbe()
         try runBlockWrapProbe()
@@ -32,6 +33,7 @@ enum TerminalTUIFoundationSmoke {
         try TerminalInputFoundationSmoke.run()
         try TerminalTextBufferFoundationSmoke.run()
         try TerminalTextEditorFoundationSmoke.run()
+        try TerminalTimelineFoundationSmoke.run()
         try runLayoutProbe()
 
         print(
@@ -60,6 +62,42 @@ enum TerminalTUIFoundationSmoke {
         guard viewport.offset == 90,
               viewport.isAtEnd else {
             throw Failure.unexpectedViewport
+        }
+    }
+
+    private static func runScrollableDocumentRevealProbe() throws {
+        var document = TerminalScrollableDocument(
+            lines: (0..<20).map(String.init),
+            visibleRows: 5,
+            followEnd: true
+        )
+
+        document.reveal(
+            row: 3,
+            margin: 1
+        )
+
+        guard document.viewport.offset == 2,
+              document.viewport.visibleRange.contains(3),
+              !document.isFollowingEnd else {
+            throw TerminalTestFailure(
+                probe: "TerminalScrollableDocument semantic reveal",
+                expectation: "offset=2 selectedRowVisible=true followingEnd=false",
+                observed: "offset=\(document.viewport.offset) selectedRowVisible=\(document.viewport.visibleRange.contains(3)) followingEnd=\(document.isFollowingEnd)"
+            )
+        }
+
+        document.update(
+            lines: (0..<25).map(String.init),
+            visibleRows: 5
+        )
+
+        guard document.viewport.offset == 2 else {
+            throw TerminalTestFailure(
+                probe: "TerminalScrollableDocument reveal disables end-follow",
+                expectation: "offset remains 2 after content growth",
+                observed: "offset=\(document.viewport.offset) followingEnd=\(document.isFollowingEnd)"
+            )
         }
     }
 

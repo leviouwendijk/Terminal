@@ -55,6 +55,17 @@ public struct TerminalScrollableDocument:
         isFollowingEnd = true
     }
 
+    public mutating func reveal(
+        row: Int,
+        margin: Int = 0
+    ) {
+        isFollowingEnd = false
+        viewport.reveal(
+            row: row,
+            margin: margin
+        )
+    }
+
     @discardableResult
     public mutating func handle(
         _ action: TerminalInteractionAction

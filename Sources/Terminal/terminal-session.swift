@@ -120,6 +120,10 @@ public final class TerminalSession: @unchecked Sendable {
             )
         }
 
+        Terminal.write(
+            TerminalCursorShape.automatic.escapeSequence,
+            to: options.outputStream
+        )
         Terminal.flush(
             options.outputStream
         )
@@ -344,7 +348,7 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
                 $0.disableBracketedPasteOnInterrupt
             }
 
-        var sequence = ""
+        var sequence = "\u{001B}[0 q"
 
         if disableBracketedPasteOnInterrupt {
             sequence += "\u{001B}[?2004l"
