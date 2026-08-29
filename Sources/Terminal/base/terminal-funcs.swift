@@ -3,24 +3,36 @@ import Foundation
 extension Terminal {
     @inline(__always)
     public static func clearLine() {
-        FileHandle.standardOutput.write(Data(ANSIColor.clearLine.rawValue.utf8))
-        FileHandle.standardOutput.write(Data(ANSIColor.cursorLeft.rawValue.replacingOccurrences(of: "{n}", with: "999").utf8))
+        Terminal.clearLine(
+            on: .standardOutput
+        )
     }
 
     @inline(__always)
     public static func hideCursor() {
-        FileHandle.standardOutput.write(Data("\u{001B}[?25l".utf8))
+        Terminal.hideCursor(
+            on: .standardOutput
+        )
     }
 
     @inline(__always)
     public static func showCursor() {
-        FileHandle.standardOutput.write(Data("\u{001B}[?25h".utf8))
+        Terminal.showCursor(
+            on: .standardOutput
+        )
     }
 
     @inline(__always)
     public static func writeInline(_ s: String) {
-        Terminal.clearLine()
-        FileHandle.standardOutput.write(Data(s.utf8))
+        Terminal.withOutputTransaction {
+            Terminal.clearLine(
+                on: .standardOutput
+            )
+            Terminal.write(
+                s,
+                to: .standardOutput
+            )
+        }
     }
 }
 

@@ -1,3 +1,5 @@
+import Foundation
+
 public struct TerminalTextInputControl:
     Sendable,
     Hashable
@@ -25,6 +27,28 @@ public struct TerminalTextInputControl:
         input.handle(
             key
         )
+    }
+
+    public mutating func handle(
+        _ event: TerminalInputEvent
+    ) -> TerminalTextInputEvent? {
+        switch event {
+        case .key(let key):
+            return handle(
+                key
+            )
+
+        case .paste(let text):
+            let text = normalizedPaste(
+                text
+            )
+
+            return input.insert(
+                text
+            )
+                ? .changed
+                : nil
+        }
     }
 
     public mutating func replace(
@@ -113,6 +137,11 @@ public struct TerminalTextInputControl:
 
         let characters = Array(
             input.text
+        ).map(
+            displayCharacter
+        )
+        let displayText = String(
+            characters
         )
         let cursor = min(
             max(
@@ -123,14 +152,14 @@ public struct TerminalTextInputControl:
         )
 
         if TerminalDisplay.width(
-            of: input.text
+            of: displayText
         ) <= columns {
             let before = String(
                 characters[..<cursor]
             )
 
             return (
-                input.text,
+                displayText,
                 min(
                     columns - 1,
                     TerminalDisplay.width(
@@ -190,5 +219,41 @@ public struct TerminalTextInputControl:
             ),
             beforeWidth
         )
+    }
+
+    private func normalizedPaste(
+        _ text: String
+    ) -> String {
+        text
+            .replacingOccurrences(
+                of: "\r\n",
+                with: "\n"
+            )
+            .replacingOccurrences(
+                of: "\r",
+                with: "\n"
+            )
+    }
+
+    private func displayCharacter(
+        _ character: Character
+    ) -> Character {
+        switch character {
+        case "\n",
+             "\r":
+            return "↵"
+
+        case "\t":
+            return "⇥"
+
+        default:
+            let isControl = character.unicodeScalars.allSatisfy {
+                $0.properties.generalCategory == .control
+            }
+
+            return isControl
+                ? "�"
+                : character
+        }
     }
 }

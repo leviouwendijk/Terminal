@@ -38,6 +38,38 @@ public extension TerminalKeyReader {
         #endif
     }
 
+    func readEvents(
+        timeoutMilliseconds: Int32,
+        maximumCount: Int = 64
+    ) -> [TerminalInputEvent] {
+        let maximumCount = max(
+            0,
+            maximumCount
+        )
+
+        guard maximumCount > 0,
+              let first = readEvent(
+                timeoutMilliseconds: timeoutMilliseconds
+              ) else {
+            return []
+        }
+
+        var events = [
+            first,
+        ]
+
+        while events.count < maximumCount,
+              let event = readEvent(
+                timeoutMilliseconds: 0
+              ) {
+            events.append(
+                event
+            )
+        }
+
+        return events
+    }
+
     func readKey(
         timeoutMilliseconds: Int32
     ) -> TerminalKey? {

@@ -61,6 +61,7 @@ enum TerminalShellSmoke {
                 useAlternateScreen: true,
                 hideCursor: true,
                 useRawMode: true,
+                useBracketedPaste: true,
                 restoreOnInterrupt: true,
                 outputStream: stream
             )
@@ -110,13 +111,14 @@ enum TerminalShellSmoke {
             visibleRows: 0
         )
         var revealEnd = true
+        var size = Terminal.size(
+            for: stream
+        )
 
-        while true {
+        func renderCurrent() {
             renderer.render(
                 frame(
-                    size: Terminal.size(
-                        for: stream
-                    ),
+                    size: size,
                     focus: focus.focused,
                     navigation: navigation,
                     destination: destination,
@@ -126,10 +128,43 @@ enum TerminalShellSmoke {
                     revealEnd: &revealEnd
                 )
             )
+        }
 
-            guard let key = reader.readKey(
-                timeoutMilliseconds: 100
-            ) else {
+        renderCurrent()
+
+        while true {
+            let events = reader.readEvents(
+                timeoutMilliseconds: 100,
+                maximumCount: 128
+            )
+
+            if events.isEmpty {
+                let currentSize = Terminal.size(
+                    for: stream
+                )
+
+                if currentSize.rows != size.rows
+                    || currentSize.columns != size.columns
+                {
+                    size = currentSize
+                    renderCurrent()
+                }
+
+                continue
+            }
+
+            for event in events {
+                if case .paste = event {
+                if focus.focused == .composer {
+                    _ = composer.handle(
+                        event
+                    )
+                }
+
+                continue
+            }
+
+            guard case .key(let key) = event else {
                 continue
             }
 
@@ -207,6 +242,12 @@ enum TerminalShellSmoke {
                     .composer
                 )
             }
+            }
+
+            size = Terminal.size(
+                for: stream
+            )
+            renderCurrent()
         }
     }
 

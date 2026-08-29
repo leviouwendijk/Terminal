@@ -99,7 +99,12 @@ struct TerminalTest {
             }
         } catch {
             Terminal.write(
-                "termtest failed: \(error)\n",
+                """
+                termtest failed
+                  type       \(String(reflecting: type(of: error)))
+                  failure    \(error)
+
+                """,
                 to: .standardError
             )
             exit(1)

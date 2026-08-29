@@ -14,9 +14,13 @@ enum TerminalInputFoundationSmoke {
         case unexpectedPaste
         case unexpectedLegacyPaste
         case unexpectedBracketedPasteSession
+        case unexpectedComposerPaste
+        case unexpectedEventBatch
     }
 
     static func run() throws {
+        try runComposerPasteProbe()
+
         guard TerminalSession.Options.interactive.useBracketedPaste else {
             throw Failure.unexpectedBracketedPasteSession
         }
@@ -25,7 +29,54 @@ enum TerminalInputFoundationSmoke {
         try runUTF8Probe()
         try runPasteProbe()
         try runLegacyPasteProbe()
+        try runEventBatchProbe()
         #endif
+    }
+
+    private static func runComposerPasteProbe() throws {
+        var composer = TerminalTextInputControl()
+        let paste = "one\r\ntwo\rthree"
+
+        guard composer.handle(
+            .paste(
+                paste
+            )
+        ) == .changed,
+        composer.input.text == "one\ntwo\nthree",
+        composer.input.cursorOffset == composer.input.text.count else {
+            throw Failure.unexpectedComposerPaste
+        }
+
+        var frame = TerminalFrame(
+            rows: 1,
+            columns: 40
+        )
+
+        composer.render(
+            into: &frame,
+            in: TerminalRegion(
+                rows: 1,
+                columns: 40
+            ),
+            isFocused: true
+        )
+
+        guard let rendered = frame.spans(
+            inRow: 0
+        ).first?.content,
+        !rendered.contains(
+            "\n"
+        ),
+        rendered.contains(
+            "one↵two↵three"
+        ),
+        composer.handle(
+            .key(
+                .enter
+            )
+        ) == .submitRequested else {
+            throw Failure.unexpectedComposerPaste
+        }
     }
 
     #if canImport(Darwin)
@@ -65,6 +116,35 @@ enum TerminalInputFoundationSmoke {
                 content
             ) else {
                 throw Failure.unexpectedPaste
+            }
+        }
+    }
+
+    private static func runEventBatchProbe() throws {
+        try withReader(
+            bytes: Array(
+                "jjkk".utf8
+            )
+        ) { reader in
+            guard reader.readEvents(
+                timeoutMilliseconds: 0,
+                maximumCount: 3
+            ) == [
+                .key(.char("j")),
+                .key(.char("j")),
+                .key(.char("k")),
+            ],
+            reader.readEvents(
+                timeoutMilliseconds: 0,
+                maximumCount: 3
+            ) == [
+                .key(.char("k")),
+            ],
+            reader.readEvents(
+                timeoutMilliseconds: 0,
+                maximumCount: 3
+            ).isEmpty else {
+                throw Failure.unexpectedEventBatch
             }
         }
     }

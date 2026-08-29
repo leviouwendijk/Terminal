@@ -1,3 +1,33 @@
+public struct TerminalZIndex:
+    Sendable,
+    Codable,
+    Hashable,
+    Comparable
+{
+    public var rawValue: Int
+
+    public init(
+        _ rawValue: Int
+    ) {
+        self.rawValue = rawValue
+    }
+
+    public static func < (
+        lhs: TerminalZIndex,
+        rhs: TerminalZIndex
+    ) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+
+    public static let base = TerminalZIndex(
+        0
+    )
+
+    public static let overlay = TerminalZIndex(
+        100
+    )
+}
+
 public struct TerminalFrameSpan:
     Sendable,
     Hashable
@@ -6,12 +36,14 @@ public struct TerminalFrameSpan:
     public var leading: Int
     public var columns: Int
     public var content: String
+    public var zIndex: TerminalZIndex
 
     public init(
         row: Int,
         leading: Int,
         columns: Int,
-        content: String
+        content: String,
+        zIndex: TerminalZIndex = .base
     ) {
         self.row = max(
             0,
@@ -26,6 +58,7 @@ public struct TerminalFrameSpan:
             columns
         )
         self.content = content
+        self.zIndex = zIndex
     }
 }
 
@@ -78,7 +111,8 @@ public struct TerminalFrame:
 
     public mutating func write(
         _ text: String,
-        in region: TerminalRegion
+        in region: TerminalRegion,
+        zIndex: TerminalZIndex = .base
     ) {
         write(
             text.split(
@@ -87,13 +121,15 @@ public struct TerminalFrame:
             ).map(
                 String.init
             ),
-            in: region
+            in: region,
+            zIndex: zIndex
         )
     }
 
     public mutating func write(
         _ lines: [String],
-        in region: TerminalRegion
+        in region: TerminalRegion,
+        zIndex: TerminalZIndex = .base
     ) {
         guard region.top < rows,
               region.leading < columns,
@@ -125,7 +161,8 @@ public struct TerminalFrame:
                     content:
                         index < lines.count
                         ? lines[index]
-                        : ""
+                        : "",
+                    zIndex: zIndex
                 )
             )
         }

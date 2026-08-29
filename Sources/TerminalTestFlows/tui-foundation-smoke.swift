@@ -11,6 +11,9 @@ enum TerminalTUIFoundationSmoke {
         case unexpectedBlockWrap
         case unexpectedDifferenceEndOfFile
         case unexpectedFrame
+        case unexpectedFrameComposition
+        case unexpectedFrameCompositionWidth
+        case unexpectedFrameCompositionBorder
         case unexpectedHorizontalLayout
         case unexpectedVerticalLayout
     }
@@ -22,10 +25,13 @@ enum TerminalTUIFoundationSmoke {
         try runBlockWrapProbe()
         try runDifferenceEndOfFileProbe()
         try runFrameProbe()
+        try runFrameCompositionProbe()
         try TerminalControlFoundationSmoke.run()
         try TerminalOverlayFoundationSmoke.run()
         try TerminalInteractionFoundationSmoke.run()
         try TerminalInputFoundationSmoke.run()
+        try TerminalTextBufferFoundationSmoke.run()
+        try TerminalTextEditorFoundationSmoke.run()
         try runLayoutProbe()
 
         print(
@@ -104,6 +110,56 @@ enum TerminalTUIFoundationSmoke {
             "abc",
             columns: 5
         ) == "abc  " else {
+            throw Failure.unexpectedDisplay
+        }
+
+        let sliced = TerminalDisplay.slice(
+            TerminalStyle.bold.apply(
+                "abcdef"
+            ),
+            columns: 2..<5
+        )
+
+        guard TerminalDisplay.width(
+            of: sliced
+        ) == 3,
+        sliced.contains(
+            "cde"
+        ) else {
+            throw Failure.unexpectedDisplay
+        }
+
+        guard TerminalDisplay.width(
+            of: "│"
+        ) == 1,
+        TerminalDisplay.width(
+            of: "─"
+        ) == 1,
+        TerminalDisplay.width(
+            of: "┌"
+        ) == 1,
+        TerminalDisplay.width(
+            of: "┘"
+        ) == 1,
+        TerminalDisplay.width(
+            of: "┌────┐"
+        ) == 6 else {
+            throw Failure.unexpectedDisplay
+        }
+
+        let leadingSlice = TerminalDisplay.slice(
+            TerminalStyle.dim.apply(
+                "│abc"
+            ),
+            columns: 0..<1
+        )
+
+        guard TerminalDisplay.width(
+            of: leadingSlice
+        ) == 1,
+        leadingSlice.contains(
+            "│"
+        ) else {
             throw Failure.unexpectedDisplay
         }
     }
@@ -207,6 +263,158 @@ enum TerminalTUIFoundationSmoke {
             ),
         ] else {
             throw Failure.unexpectedFrame
+        }
+    }
+
+    private static func runFrameCompositionProbe() throws {
+        var frame = TerminalFrame(
+            rows: 1,
+            columns: 20
+        )
+
+        frame.write(
+            "abcdefghijklmnopqrst",
+            in: TerminalRegion(
+                rows: 1,
+                columns: 20
+            )
+        )
+        frame.write(
+            "TOP",
+            in: TerminalRegion(
+                leading: 5,
+                rows: 1,
+                columns: 5
+            ),
+            zIndex: .overlay
+        )
+        frame.write(
+            "late",
+            in: TerminalRegion(
+                leading: 6,
+                rows: 1,
+                columns: 4
+            )
+        )
+
+        let resolved = frame.resolvedSpans(
+            inRow: 0
+        )
+
+        guard resolved == [
+            TerminalFrameSpan(
+                row: 0,
+                leading: 0,
+                columns: 5,
+                content: "abcde"
+            ),
+            TerminalFrameSpan(
+                row: 0,
+                leading: 5,
+                columns: 5,
+                content: "TOP  "
+            ),
+            TerminalFrameSpan(
+                row: 0,
+                leading: 10,
+                columns: 10,
+                content: "klmnopqrst"
+            ),
+        ] else {
+            throw Failure.unexpectedFrameComposition
+        }
+
+        guard resolved.allSatisfy({
+            TerminalDisplay.width(
+                of: $0.content
+            ) == $0.columns
+        }) else {
+            throw Failure.unexpectedFrameCompositionWidth
+        }
+
+        for pair in zip(
+            resolved,
+            resolved.dropFirst()
+        ) {
+            guard pair.0.leading + pair.0.columns
+                <= pair.1.leading else {
+                throw Failure.unexpectedFrameComposition
+            }
+        }
+
+        var borderFrame = TerminalFrame(
+            rows: 1,
+            columns: 8
+        )
+        let border = TerminalStyle.dim.apply(
+            "│"
+        )
+            + String(
+                repeating: " ",
+                count: 6
+            )
+            + TerminalStyle.dim.apply(
+                "│"
+            )
+
+        borderFrame.write(
+            border,
+            in: TerminalRegion(
+                rows: 1,
+                columns: 8
+            ),
+            zIndex: .overlay
+        )
+        borderFrame.write(
+            "content",
+            in: TerminalRegion(
+                leading: 2,
+                rows: 1,
+                columns: 4
+            ),
+            zIndex: .overlay
+        )
+
+        let borderResolved = borderFrame.resolvedSpans(
+            inRow: 0
+        )
+
+        guard borderResolved.count == 3,
+              borderResolved[0].leading == 0,
+              borderResolved[0].columns == 2,
+              stripANSI(
+                borderResolved[0].content
+              ) == "│ ",
+              borderResolved[1].leading == 2,
+              borderResolved[1].columns == 4,
+              stripANSI(
+                borderResolved[1].content
+              ) == "cont",
+              borderResolved[2].leading == 6,
+              borderResolved[2].columns == 2,
+              stripANSI(
+                borderResolved[2].content
+              ) == " │" else {
+            throw Failure.unexpectedFrameCompositionBorder
+        }
+
+        guard borderResolved.allSatisfy({
+            TerminalDisplay.width(
+                of: $0.content
+            ) == $0.columns
+        }) else {
+            throw Failure.unexpectedFrameCompositionWidth
+        }
+
+        let resolvedFrame = borderFrame.resolved()
+
+        guard resolvedFrame.spans(
+            inRow: 0
+        ) == borderResolved,
+        resolvedFrame.spans(
+            inRow: 1
+        ).isEmpty else {
+            throw Failure.unexpectedFrameComposition
         }
     }
 

@@ -1,5 +1,9 @@
 import Foundation
 
+private enum TerminalOutputSynchronization {
+    static let lock = NSRecursiveLock()
+}
+
 public enum TerminalStream: Sendable, Codable, Hashable {
     case standardOutput
     case standardError
@@ -21,9 +25,30 @@ public extension Terminal {
         _ data: Data,
         to stream: TerminalStream = .standardOutput
     ) {
+        TerminalOutputSynchronization.lock.lock()
+
+        defer {
+            TerminalOutputSynchronization.lock.unlock()
+        }
+
         stream.fileHandle.write(
             data
         )
+    }
+}
+
+extension Terminal {
+    @inline(__always)
+    static func withOutputTransaction<Result>(
+        _ body: () throws -> Result
+    ) rethrows -> Result {
+        TerminalOutputSynchronization.lock.lock()
+
+        defer {
+            TerminalOutputSynchronization.lock.unlock()
+        }
+
+        return try body()
     }
 }
 
@@ -33,6 +58,12 @@ public extension Terminal {
         _ string: String,
         to stream: TerminalStream = .standardOutput
     ) {
+        TerminalOutputSynchronization.lock.lock()
+
+        defer {
+            TerminalOutputSynchronization.lock.unlock()
+        }
+
         stream.fileHandle.write(
             Data(
                 string.utf8

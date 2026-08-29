@@ -9,6 +9,41 @@ private enum TerminalOverlaySmokeFocus:
     case base
     case approval
     case inspector
+    case editor
+}
+
+private struct TerminalOverlaySmokePaste:
+    Sendable,
+    Hashable
+{
+    var text: String
+
+    init(
+        _ text: String
+    ) {
+        self.text = TerminalTextBuffer(
+            text: text
+        ).text
+    }
+
+    var lineCount: Int {
+        text.reduce(
+            1
+        ) {
+            count,
+            character in
+
+            count + (character == "\n" ? 1 : 0)
+        }
+    }
+
+    var summary: String {
+        let label = lineCount == 1
+            ? "line"
+            : "lines"
+
+        return "\(lineCount) \(label) pasted"
+    }
 }
 
 private enum TerminalOverlaySmokeInspector:
@@ -70,6 +105,7 @@ enum TerminalOverlaySmoke {
                 useAlternateScreen: true,
                 hideCursor: true,
                 useRawMode: true,
+                useBracketedPaste: true,
                 restoreOnInterrupt: true,
                 outputStream: stream
             )
@@ -90,12 +126,18 @@ enum TerminalOverlaySmoke {
             prompt: "> ",
             placeholder: "type a message..."
         )
+        var pastedText: TerminalOverlaySmokePaste?
+        var editor = TerminalTextEditor()
         var approval = TerminalListControl(
             items: approvalItems,
             currentID: TerminalOverlaySmokeApprovalChoice.approve,
             id: {
                 $0.id
             }
+        )
+        var transcriptDocument = TerminalScrollableDocument(
+            visibleRows: 0,
+            followEnd: true
         )
         var inspector: TerminalOverlaySmokeInspector?
         var inspectorDocument = TerminalScrollableDocument(
@@ -114,25 +156,86 @@ enum TerminalOverlaySmoke {
                 body: "The frame can now prove modal focus capture without changing application semantics."
             ),
         ]
+        var size = Terminal.size(
+            for: stream
+        )
 
-        while true {
+        func renderCurrent() {
             renderer.render(
                 frame(
-                    size: Terminal.size(
-                        for: stream
-                    ),
+                    size: size,
                     focus: focus,
                     composer: composer,
+                    pastedText: pastedText,
+                    editor: &editor,
                     approval: approval,
+                    transcriptDocument: &transcriptDocument,
                     inspector: inspector,
                     inspectorDocument: &inspectorDocument,
                     messages: messages
                 )
             )
+        }
 
-            guard let key = reader.readKey(
-                timeoutMilliseconds: 100
-            ) else {
+        renderCurrent()
+
+        while true {
+            let events = reader.readEvents(
+                timeoutMilliseconds: 100,
+                maximumCount: 128
+            )
+
+            if events.isEmpty {
+                let currentSize = Terminal.size(
+                    for: stream
+                )
+
+                if currentSize.rows != size.rows
+                    || currentSize.columns != size.columns
+                {
+                    size = currentSize
+                    renderCurrent()
+                }
+
+                continue
+            }
+
+            for event in events {
+                if case .paste(let text) = event {
+                    switch focus.current {
+                    case .base:
+                        let normalized = TerminalTextBuffer(
+                            text: text
+                        ).text
+
+                        if normalized.isEmpty {
+                            continue
+                        }
+
+                        if normalized.contains("\n") {
+                            pastedText = TerminalOverlaySmokePaste(
+                                normalized
+                            )
+                        } else {
+                            _ = composer.handle(
+                                event
+                            )
+                        }
+
+                    case .editor:
+                        _ = editor.handle(
+                            event
+                        )
+
+                    case .approval,
+                         .inspector:
+                        break
+                    }
+
+                    continue
+                }
+
+            guard case .key(let key) = event else {
                 continue
             }
 
@@ -151,9 +254,52 @@ enum TerminalOverlaySmoke {
                         .approval
                     )
 
+                case .control("E"):
+                    if let pastedText {
+                        editor.replace(
+                            with: pastedText.text
+                        )
+                        editor.setMode(
+                            .normal
+                        )
+                        focus.push(
+                            .editor
+                        )
+                    } else {
+                        _ = composer.handle(
+                            key
+                        )
+                    }
+
+                case .control("X"):
+                    if pastedText != nil {
+                        pastedText = nil
+                    } else {
+                        _ = composer.handle(
+                            key
+                        )
+                    }
+
+                case .pageUp,
+                     .control("U"):
+                    _ = transcriptDocument.handle(
+                        .motion(
+                            .pageUp
+                        )
+                    )
+
+                case .pageDown,
+                     .control("D"):
+                    _ = transcriptDocument.handle(
+                        .motion(
+                            .pageDown
+                        )
+                    )
+
                 case .enter:
                     submit(
                         composer: &composer,
+                        pastedText: &pastedText,
                         messages: &messages
                     )
 
@@ -248,7 +394,32 @@ enum TerminalOverlaySmoke {
                         )
                     }
                 }
+
+            case .editor:
+                if key == .control("C") {
+                    return
+                }
+
+                if case .cancelRequested? = editor.handle(
+                    key
+                ) {
+                    let text = editor.buffer.text
+
+                    pastedText = text.isEmpty
+                        ? nil
+                        : TerminalOverlaySmokePaste(
+                            text
+                        )
+
+                    _ = focus.pop()
+                }
             }
+            }
+
+            size = Terminal.size(
+                for: stream
+            )
+            renderCurrent()
         }
     }
 
@@ -280,21 +451,38 @@ enum TerminalOverlaySmoke {
 
     private static func submit(
         composer: inout TerminalTextInputControl,
+        pastedText: inout TerminalOverlaySmokePaste?,
         messages: inout [TerminalOverlaySmokeMessage]
     ) {
-        let text = composer.input.text
+        let inlineText = composer.input.text
             .trimmingCharacters(
                 in: .whitespacesAndNewlines
             )
+        var sections: [String] = []
 
-        guard !text.isEmpty else {
+        if !inlineText.isEmpty {
+            sections.append(
+                inlineText
+            )
+        }
+
+        if let pastedText,
+           !pastedText.text.isEmpty {
+            sections.append(
+                pastedText.text
+            )
+        }
+
+        guard !sections.isEmpty else {
             return
         }
 
         messages.append(
             TerminalOverlaySmokeMessage(
                 role: "you",
-                body: text
+                body: sections.joined(
+                    separator: "\n\n"
+                )
             )
         )
         messages.append(
@@ -303,17 +491,22 @@ enum TerminalOverlaySmoke {
                 body: "Composer state and transcript mutation remain owned by the base shell."
             )
         )
+
         composer.clear()
+        pastedText = nil
     }
 
     private static func frame(
         size: TerminalSize,
         focus: TerminalFocusStack<TerminalOverlaySmokeFocus>,
         composer: TerminalTextInputControl,
+        pastedText: TerminalOverlaySmokePaste?,
+        editor: inout TerminalTextEditor,
         approval: TerminalListControl<
             ApprovalItem,
             TerminalOverlaySmokeApprovalChoice
         >,
+        transcriptDocument: inout TerminalScrollableDocument,
         inspector: TerminalOverlaySmokeInspector?,
         inspectorDocument: inout TerminalScrollableDocument,
         messages: [TerminalOverlaySmokeMessage]
@@ -323,6 +516,8 @@ enum TerminalOverlaySmoke {
             composer: composer,
             composerFocused:
                 focus.current == .base,
+            pastedText: pastedText,
+            transcriptDocument: &transcriptDocument,
             messages: messages
         )
         let root = TerminalRegion(
@@ -342,12 +537,6 @@ enum TerminalOverlaySmoke {
             )
 
         case .inspector:
-            renderApproval(
-                into: &frame,
-                in: root,
-                approval: approval
-            )
-
             if let inspector {
                 renderInspector(
                     inspector,
@@ -356,6 +545,13 @@ enum TerminalOverlaySmoke {
                     document: &inspectorDocument
                 )
             }
+
+        case .editor:
+            renderEditor(
+                into: &frame,
+                in: root,
+                editor: &editor
+            )
         }
 
         return frame
@@ -365,6 +561,8 @@ enum TerminalOverlaySmoke {
         size: TerminalSize,
         composer: TerminalTextInputControl,
         composerFocused: Bool,
+        pastedText: TerminalOverlaySmokePaste?,
+        transcriptDocument: inout TerminalScrollableDocument,
         messages: [TerminalOverlaySmokeMessage]
     ) -> TerminalFrame {
         var frame = TerminalFrame(
@@ -441,11 +639,15 @@ enum TerminalOverlaySmoke {
             in: horizontal[0]
         )
 
-        frame.write(
-            transcriptLines(
+        transcriptDocument.update(
+            lines: transcriptLines(
                 messages,
                 width: horizontal[1].columns
             ),
+            visibleRows: horizontal[1].rows
+        )
+        transcriptDocument.render(
+            into: &frame,
             in: horizontal[1]
         )
 
@@ -479,10 +681,32 @@ enum TerminalOverlaySmoke {
             )
         }
 
+        if footer.rows > 2,
+           let pastedText {
+            let summary = TerminalDisplay.fitted(
+                "paste  \(pastedText.summary)  ctrl-e edit  ctrl-x remove",
+                columns: footer.columns
+            )
+
+            frame.write(
+                TerminalStyle(
+                    .inverse
+                ).apply(
+                    summary
+                ),
+                in: TerminalRegion(
+                    top: footer.top + 2,
+                    leading: footer.leading,
+                    rows: 1,
+                    columns: footer.columns
+                )
+            )
+        }
+
         if footer.rows > 3 {
             frame.write(
                 TerminalStyle.dim.apply(
-                    "ctrl-o approval overlay  ctrl-c exit"
+                    "enter submit  pgup/pgdn transcript  ctrl-o approval  ctrl-c exit"
                 ),
                 in: TerminalRegion(
                     top: footer.top + 3,
@@ -603,6 +827,64 @@ enum TerminalOverlaySmoke {
             lines,
             in: content
         )
+    }
+
+    private static func renderEditor(
+        into frame: inout TerminalFrame,
+        in root: TerminalRegion,
+        editor: inout TerminalTextEditor
+    ) {
+        let overlay = TerminalOverlay(
+            placement: .centered(
+                columns: 78,
+                rows: 24
+            ),
+            outerInsets: TerminalInsets(
+                vertical: 1,
+                horizontal: 2
+            )
+        )
+        let content = overlay.render(
+            into: &frame,
+            in: root,
+            title: "pasted text editor"
+        )
+
+        guard !content.isEmpty else {
+            return
+        }
+
+        let editorRows = max(
+            0,
+            content.rows - 1
+        )
+
+        if editorRows > 0 {
+            editor.render(
+                into: &frame,
+                in: TerminalRegion(
+                    top: content.top,
+                    leading: content.leading,
+                    rows: editorRows,
+                    columns: content.columns
+                ),
+                isFocused: true
+            )
+        }
+
+        if content.rows > 0 {
+            frame.write(
+                TerminalStyle.dim.apply(
+                    "mode \(editor.mode)  i insert  v visual  esc normal/close  h/j/k/l move"
+                ),
+                in: TerminalRegion(
+                    top: content.bottom - 1,
+                    leading: content.leading,
+                    rows: 1,
+                    columns: content.columns
+                )
+            )
+        }
     }
 
     private static func renderInspector(

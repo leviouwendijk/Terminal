@@ -98,6 +98,166 @@ public enum TerminalDisplay {
         return result
     }
 
+    public static func slice(
+        _ text: String,
+        columns requestedRange: Range<Int>
+    ) -> String {
+        let lowerBound = max(
+            0,
+            requestedRange.lowerBound
+        )
+        let upperBound = max(
+            lowerBound,
+            requestedRange.upperBound
+        )
+
+        guard upperBound > lowerBound else {
+            return ""
+        }
+
+        let requestedColumns =
+            upperBound
+            - lowerBound
+
+        if lowerBound == 0 {
+            return fitted(
+                text,
+                columns: requestedColumns
+            )
+        }
+
+        var result = ""
+        var prefix = ""
+        var displayColumn = 0
+        var outputColumn = 0
+        var index = text.startIndex
+        var didStart = false
+        var containsEscape = false
+        var containsOSC = false
+
+        while index < text.endIndex {
+            if isEscape(
+                text[index]
+            ) {
+                let end = endOfEscapeSequence(
+                    in: text,
+                    from: index
+                )
+                let sequence = String(
+                    text[index..<end]
+                )
+
+                containsEscape = true
+
+                if sequence.hasPrefix(
+                    "\u{001B}]"
+                ) {
+                    containsOSC = true
+                }
+
+                if displayColumn < lowerBound {
+                    prefix += sequence
+                } else if displayColumn < upperBound {
+                    if !didStart {
+                        result += prefix
+                        didStart = true
+                    }
+
+                    result += sequence
+                }
+
+                index = end
+                continue
+            }
+
+            let character = text[index]
+            let next = text.index(
+                after: index
+            )
+            let width = characterWidth(
+                character
+            )
+            let characterStart = displayColumn
+            let characterEnd = displayColumn + width
+
+            if characterEnd <= lowerBound {
+                displayColumn = characterEnd
+                index = next
+                continue
+            }
+
+            if characterStart >= upperBound {
+                break
+            }
+
+            if !didStart {
+                result += prefix
+                didStart = true
+            }
+
+            let visibleStart = max(
+                characterStart,
+                lowerBound
+            )
+            let visibleEnd = min(
+                characterEnd,
+                upperBound
+            )
+            let visibleWidth = max(
+                0,
+                visibleEnd - visibleStart
+            )
+            let targetColumn =
+                visibleStart
+                - lowerBound
+
+            if targetColumn > outputColumn {
+                result += String(
+                    repeating: " ",
+                    count:
+                        targetColumn
+                        - outputColumn
+                )
+                outputColumn = targetColumn
+            }
+
+            if characterStart >= lowerBound,
+               characterEnd <= upperBound {
+                result.append(
+                    character
+                )
+            } else {
+                result += String(
+                    repeating: " ",
+                    count: visibleWidth
+                )
+            }
+
+            outputColumn += visibleWidth
+            displayColumn = characterEnd
+            index = next
+        }
+
+        if outputColumn < requestedColumns {
+            result += String(
+                repeating: " ",
+                count:
+                    requestedColumns
+                    - outputColumn
+            )
+        }
+
+        if containsOSC {
+            result += "\u{001B}]8;;\u{0007}"
+        }
+
+        if containsEscape {
+            result += ANSIColor.reset.rawValue
+        }
+
+        return result
+    }
+
     public static func fitted(
         _ text: String,
         columns: Int
@@ -132,6 +292,12 @@ public enum TerminalDisplay {
     private static func characterWidth(
         _ character: Character
     ) -> Int {
+        if usesEmojiPresentation(
+            character
+        ) {
+            return 2
+        }
+
         #if canImport(Darwin)
         let width = character.unicodeScalars.reduce(
             0
@@ -145,11 +311,14 @@ public enum TerminalDisplay {
                 )
             )
 
-            return total + max(
-                0,
-                Int(
+            if scalarWidth >= 0 {
+                return total + Int(
                     scalarWidth
                 )
+            }
+
+            return total + fallbackWidth(
+                for: scalar
             )
         }
 
@@ -163,6 +332,34 @@ public enum TerminalDisplay {
             : 1
         #endif
     }
+
+    private static func usesEmojiPresentation(
+        _ character: Character
+    ) -> Bool {
+        character.unicodeScalars.contains {
+            scalar in
+
+            scalar.properties.isEmojiPresentation
+                || scalar.value == 0xFE0F
+        }
+    }
+
+    #if canImport(Darwin)
+    private static func fallbackWidth(
+        for scalar: Unicode.Scalar
+    ) -> Int {
+        switch scalar.properties.generalCategory {
+        case .control,
+             .format,
+             .nonspacingMark,
+             .enclosingMark:
+            return 0
+
+        default:
+            return 1
+        }
+    }
+    #endif
 
     private static func isEscape(
         _ character: Character
