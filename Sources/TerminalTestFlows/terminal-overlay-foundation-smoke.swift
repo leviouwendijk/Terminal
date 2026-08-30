@@ -8,6 +8,7 @@ enum TerminalOverlayFoundationSmoke {
         case unexpectedCenteredRegion
         case unexpectedTrailingRegion
         case unexpectedComposition
+        case unexpectedLayer
     }
 
     private enum Focus:
@@ -127,16 +128,26 @@ enum TerminalOverlayFoundationSmoke {
             in: root
         )
 
+        let overlayLayer = TerminalZIndex(
+            200
+        )
+
         _ = overlay.render(
             into: &frame,
             in: root,
-            title: "overlay"
+            title: "overlay",
+            zIndex: overlayLayer
         )
 
-        guard frame.spans(
+        guard let overlaySpan = frame.spans(
             inRow: region.top
-        ).last?.leading == region.leading else {
+        ).last,
+              overlaySpan.leading == region.leading else {
             throw Failure.unexpectedComposition
+        }
+
+        guard overlaySpan.zIndex == overlayLayer else {
+            throw Failure.unexpectedLayer
         }
     }
 }

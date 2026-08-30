@@ -8,6 +8,9 @@ enum TerminalInteractionFoundationSmoke {
         case unexpectedInteraction
         case unexpectedDocument
         case unexpectedDocumentScrollHint
+        case unexpectedDocumentWordWrapping
+        case unexpectedDocumentDisplayWrapping
+        case unexpectedDocumentLayer
     }
 
     static func run() throws {
@@ -195,6 +198,91 @@ enum TerminalInteractionFoundationSmoke {
             ),
         ] else {
             throw Failure.unexpectedDocumentScrollHint
+        }
+
+        var wordDocument = TerminalScrollableDocument()
+
+        wordDocument.update(
+            text: "The parent run remains on hold until an explicit recovery action is chosen.",
+            columns: 18,
+            visibleRows: 6,
+            wrapping: .word
+        )
+
+        guard wordDocument.lines == [
+            "The parent run",
+            "remains on hold",
+            "until an explicit",
+            "recovery action is",
+            "chosen.",
+        ] else {
+            throw Failure.unexpectedDocumentWordWrapping
+        }
+
+        var displayDocument = TerminalScrollableDocument()
+
+        displayDocument.update(
+            text: "abcdef\nxy",
+            columns: 3,
+            visibleRows: 4,
+            wrapping: .display
+        )
+
+        guard displayDocument.lines == [
+            "abc",
+            "def",
+            "xy",
+        ] else {
+            throw Failure.unexpectedDocumentDisplayWrapping
+        }
+
+        let nestedLayer = TerminalZIndex(
+            200
+        )
+        let layeredRegion = TerminalRegion(
+            rows: 1,
+            columns: 12
+        )
+        var layeredFrame = TerminalFrame(
+            rows: 1,
+            columns: 12
+        )
+        var layeredDocument = TerminalScrollableDocument(
+            lines: [
+                "nested",
+            ],
+            visibleRows: 1
+        )
+
+        layeredFrame.write(
+            "underneath",
+            in: layeredRegion,
+            zIndex: .overlay
+        )
+        layeredDocument.render(
+            into: &layeredFrame,
+            in: layeredRegion,
+            zIndex: nestedLayer
+        )
+
+        let layeredResolved = layeredFrame.resolvedSpans(
+            inRow: 0
+        )
+        let layeredText = layeredResolved
+            .map {
+                stripANSI(
+                    $0.content
+                )
+            }
+            .joined()
+
+        guard layeredText.hasPrefix(
+            "nested"
+        ),
+              !layeredText.contains(
+                "underneath"
+              ) else {
+            throw Failure.unexpectedDocumentLayer
         }
     }
 }

@@ -153,7 +153,8 @@ public struct TerminalOverlay:
     public func render(
         into frame: inout TerminalFrame,
         in container: TerminalRegion,
-        title: String? = nil
+        title: String? = nil,
+        zIndex: TerminalZIndex = .base
     ) -> TerminalRegion {
         let region = region(
             in: container
@@ -168,7 +169,8 @@ public struct TerminalOverlay:
                 repeating: "",
                 count: region.rows
             ),
-            in: region
+            in: region,
+            zIndex: zIndex
         )
 
         guard region.rows >= 2,
@@ -224,7 +226,8 @@ public struct TerminalOverlay:
 
         frame.write(
             lines,
-            in: region
+            in: region,
+            zIndex: zIndex
         )
 
         return contentRegion(

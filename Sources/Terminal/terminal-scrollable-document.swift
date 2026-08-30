@@ -1,3 +1,11 @@
+public enum TerminalDocumentWrapping:
+    Sendable,
+    Hashable
+{
+    case display
+    case word
+}
+
 public struct TerminalScrollableDocument:
     Sendable,
     Hashable
@@ -71,6 +79,38 @@ public struct TerminalScrollableDocument:
         }
     }
 
+    public mutating func update(
+        text: String,
+        columns: Int,
+        visibleRows: Int,
+        wrapping: TerminalDocumentWrapping = .display
+    ) {
+        let columns = max(
+            1,
+            columns
+        )
+        let lines: [String]
+
+        switch wrapping {
+        case .display:
+            lines = TerminalTextLayout(
+                text: text,
+                columns: columns
+            ).rows.map(\.content)
+
+        case .word:
+            lines = TerminalTextWrap.lines(
+                text,
+                width: columns
+            )
+        }
+
+        update(
+            lines: lines,
+            visibleRows: visibleRows
+        )
+    }
+
     public mutating func moveToStart() {
         isFollowingEnd = false
         viewport.moveToStart()
@@ -142,7 +182,8 @@ public struct TerminalScrollableDocument:
 
     public mutating func render(
         into frame: inout TerminalFrame,
-        in region: TerminalRegion
+        in region: TerminalRegion,
+        zIndex: TerminalZIndex = .base
     ) {
         if let presentationState,
            presentationState.region == region {
@@ -161,7 +202,8 @@ public struct TerminalScrollableDocument:
 
         frame.write(
             visibleLines,
-            in: region
+            in: region,
+            zIndex: zIndex
         )
     }
 
