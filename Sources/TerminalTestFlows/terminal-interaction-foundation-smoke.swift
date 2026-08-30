@@ -7,6 +7,7 @@ enum TerminalInteractionFoundationSmoke {
         case unexpectedMode
         case unexpectedInteraction
         case unexpectedDocument
+        case unexpectedDocumentScrollHint
     }
 
     static func run() throws {
@@ -154,6 +155,46 @@ enum TerminalInteractionFoundationSmoke {
         guard document.viewport.offset == 0,
               !document.isFollowingEnd else {
             throw Failure.unexpectedDocument
+        }
+
+        let region = TerminalRegion(
+            rows: 4,
+            columns: 12
+        )
+        var initialFrame = TerminalFrame(
+            rows: 4,
+            columns: 12
+        )
+
+        document.render(
+            into: &initialFrame,
+            in: region
+        )
+
+        _ = document.handle(
+            .motion(
+                .down
+            )
+        )
+
+        var scrolledFrame = TerminalFrame(
+            rows: 4,
+            columns: 12
+        )
+
+        document.render(
+            into: &scrolledFrame,
+            in: region
+        )
+
+        guard scrolledFrame.scrolls == [
+            TerminalFrameScroll(
+                top: 0,
+                rows: 4,
+                delta: 1
+            ),
+        ] else {
+            throw Failure.unexpectedDocumentScrollHint
         }
     }
 }

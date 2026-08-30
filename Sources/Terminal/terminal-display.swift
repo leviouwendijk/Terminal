@@ -6,6 +6,12 @@ public enum TerminalDisplay {
     public static func width(
         of text: String
     ) -> Int {
+        if isSimpleASCII(
+            text
+        ) {
+            return text.utf8.count
+        }
+
         var width = 0
         var index = text.startIndex
 
@@ -44,6 +50,23 @@ public enum TerminalDisplay {
 
         guard columns > 0 else {
             return ""
+        }
+
+        if isSimpleASCII(
+            text
+        ) {
+            guard text.utf8.count > columns else {
+                return text
+            }
+
+            let end = text.index(
+                text.startIndex,
+                offsetBy: columns
+            )
+
+            return String(
+                text[..<end]
+            )
         }
 
         var result = ""
@@ -118,6 +141,39 @@ public enum TerminalDisplay {
         let requestedColumns =
             upperBound
             - lowerBound
+
+        if isSimpleASCII(
+            text
+        ) {
+            let count = text.utf8.count
+            let start = min(
+                lowerBound,
+                count
+            )
+            let end = min(
+                upperBound,
+                count
+            )
+            let startIndex = text.index(
+                text.startIndex,
+                offsetBy: start
+            )
+            let endIndex = text.index(
+                startIndex,
+                offsetBy: end - start
+            )
+            let visible = String(
+                text[startIndex..<endIndex]
+            )
+
+            return visible
+                + String(
+                    repeating: " ",
+                    count:
+                        requestedColumns
+                        - (end - start)
+                )
+        }
 
         if lowerBound == 0 {
             return fitted(
@@ -271,6 +327,29 @@ public enum TerminalDisplay {
             return ""
         }
 
+        if isSimpleASCII(
+            text
+        ) {
+            let count = text.utf8.count
+
+            if count >= columns {
+                let end = text.index(
+                    text.startIndex,
+                    offsetBy: columns
+                )
+
+                return String(
+                    text[..<end]
+                )
+            }
+
+            return text
+                + String(
+                    repeating: " ",
+                    count: columns - count
+                )
+        }
+
         let clipped = clipped(
             text,
             columns: columns
@@ -287,6 +366,17 @@ public enum TerminalDisplay {
                 repeating: " ",
                 count: remaining
             )
+    }
+
+    private static func isSimpleASCII(
+        _ text: String
+    ) -> Bool {
+        text.utf8.allSatisfy {
+            byte in
+
+            byte >= 0x20
+                && byte <= 0x7E
+        }
     }
 
     private static func characterWidth(

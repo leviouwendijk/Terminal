@@ -62,6 +62,39 @@ public struct TerminalFrameSpan:
     }
 }
 
+public struct TerminalFrameScroll:
+    Sendable,
+    Hashable
+{
+    public var top: Int
+    public var rows: Int
+    public var delta: Int
+
+    public init(
+        top: Int,
+        rows: Int,
+        delta: Int
+    ) {
+        self.top = max(
+            0,
+            top
+        )
+        self.rows = max(
+            0,
+            rows
+        )
+        self.delta = delta
+    }
+
+    public var bottom: Int {
+        top + rows
+    }
+
+    public var rowRange: Range<Int> {
+        top..<bottom
+    }
+}
+
 public struct TerminalFrameCursor:
     Sendable,
     Hashable
@@ -95,6 +128,7 @@ public struct TerminalFrame:
     public var columns: Int
     public private(set) var spans: [TerminalFrameSpan]
     public private(set) var cursor: TerminalFrameCursor?
+    public private(set) var scrolls: [TerminalFrameScroll]
 
     public init(
         rows: Int,
@@ -110,6 +144,7 @@ public struct TerminalFrame:
         )
         self.spans = []
         self.cursor = nil
+        self.scrolls = []
     }
 
     public mutating func write(
@@ -179,6 +214,53 @@ public struct TerminalFrame:
         }
     }
 
+    public mutating func scrollRows(
+        in region: TerminalRegion,
+        by delta: Int
+    ) {
+        let top = min(
+            rows,
+            max(
+                0,
+                region.top
+            )
+        )
+        let bottom = min(
+            rows,
+            max(
+                top,
+                region.bottom
+            )
+        )
+        let visibleRows = bottom - top
+
+        guard delta != 0,
+              visibleRows > 1,
+              abs(delta) < visibleRows else {
+            return
+        }
+
+        let scroll = TerminalFrameScroll(
+            top: top,
+            rows: visibleRows,
+            delta: delta
+        )
+
+        guard !scrolls.contains(
+            where: {
+                $0.rowRange.overlaps(
+                    scroll.rowRange
+                )
+            }
+        ) else {
+            return
+        }
+
+        scrolls.append(
+            scroll
+        )
+    }
+
     public mutating func placeCursor(
         row: Int,
         column: Int,
@@ -215,6 +297,9 @@ public struct TerminalFrame:
 
     public mutating func removeAll() {
         spans.removeAll(
+            keepingCapacity: true
+        )
+        scrolls.removeAll(
             keepingCapacity: true
         )
         cursor = nil

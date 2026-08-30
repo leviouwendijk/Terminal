@@ -125,6 +125,20 @@ public extension TerminalFrame {
     private func resolve(
         _ entries: [TerminalFrameOrderedSpan]
     ) -> [TerminalFrameSpan] {
+        if entries.count == 1,
+           let span = clippedToFrame(
+            entries[0].span
+           ) {
+            return [
+                TerminalFrameSpan(
+                    row: span.row,
+                    leading: span.leading,
+                    columns: span.columns,
+                    content: span.content
+                ),
+            ]
+        }
+
         let ordered = entries.sorted {
             lhs,
             rhs in
@@ -197,15 +211,18 @@ private extension TerminalFrame {
             span.content,
             columns: span.columns
         )
+        let visibleContent = visibleColumns == span.columns
+            ? content
+            : TerminalDisplay.slice(
+                content,
+                columns: 0..<visibleColumns
+            )
 
         return TerminalFrameSpan(
             row: span.row,
             leading: span.leading,
             columns: visibleColumns,
-            content: TerminalDisplay.slice(
-                content,
-                columns: 0..<visibleColumns
-            ),
+            content: visibleContent,
             zIndex: span.zIndex
         )
     }

@@ -14,6 +14,7 @@ enum TerminalTextEditorFoundationSmoke {
         case unexpectedRender
         case unexpectedReflow
         case unexpectedReplacementRender
+        case unexpectedScrollHint
     }
 
     static func run() throws {
@@ -22,6 +23,7 @@ enum TerminalTextEditorFoundationSmoke {
         try runVisualProbe()
         try runPasteProbe()
         try runRenderProbe()
+        try runScrollHintProbe()
     }
 
     private static func runModeAndInsertionProbe() throws {
@@ -272,6 +274,54 @@ enum TerminalTextEditorFoundationSmoke {
             shape: .block
         ) else {
             throw Failure.unexpectedReplacementRender
+        }
+    }
+
+    private static func runScrollHintProbe() throws {
+        var editor = TerminalTextEditor(
+            text: "one\ntwo\nthree\nfour",
+            cursorOffset: 0,
+            visibleRows: 3
+        )
+        let region = TerminalRegion(
+            rows: 3,
+            columns: 8
+        )
+        var initialFrame = TerminalFrame(
+            rows: 3,
+            columns: 8
+        )
+
+        editor.render(
+            into: &initialFrame,
+            in: region
+        )
+
+        _ = editor.handle(
+            .char("j")
+        )
+        _ = editor.handle(
+            .char("j")
+        )
+
+        var scrolledFrame = TerminalFrame(
+            rows: 3,
+            columns: 8
+        )
+
+        editor.render(
+            into: &scrolledFrame,
+            in: region
+        )
+
+        guard scrolledFrame.scrolls == [
+            TerminalFrameScroll(
+                top: 0,
+                rows: 3,
+                delta: 1
+            ),
+        ] else {
+            throw Failure.unexpectedScrollHint
         }
     }
 }

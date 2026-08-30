@@ -19,6 +19,7 @@ public struct TerminalTextEditor:
     public private(set) var selectionAnchor: Int?
 
     private var layoutCache: LayoutCache?
+    private var presentationState: PresentationState?
 
     public init(
         text: String = "",
@@ -38,6 +39,7 @@ public struct TerminalTextEditor:
         )
         self.selectionAnchor = nil
         self.layoutCache = nil
+        self.presentationState = nil
     }
 
     public static func == (
@@ -109,6 +111,7 @@ public struct TerminalTextEditor:
             cursorOffset: cursorOffset
         )
         selectionAnchor = nil
+        presentationState = nil
     }
 
     public mutating func setMode(
@@ -237,6 +240,21 @@ public struct TerminalTextEditor:
                     region.rows - 1
                 )
             )
+        )
+
+        if let presentationState,
+           presentationState.region == region {
+            frame.scrollRows(
+                in: region,
+                by:
+                    viewport.offset
+                    - presentationState.offset
+            )
+        }
+
+        presentationState = PresentationState(
+            region: region,
+            offset: viewport.offset
         )
 
         let visibleRows = viewport.visibleRange
@@ -533,6 +551,13 @@ public struct TerminalTextEditor:
                 selected
             )
             + after
+    }
+
+    private struct PresentationState:
+        Sendable
+    {
+        var region: TerminalRegion
+        var offset: Int
     }
 
     private struct LayoutCache:

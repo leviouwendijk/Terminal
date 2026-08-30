@@ -6,6 +6,8 @@ public struct TerminalScrollableDocument:
     public private(set) var viewport: TerminalViewport
     public private(set) var isFollowingEnd: Bool
 
+    private var presentationState: PresentationState?
+
     public init(
         lines: [String] = [],
         visibleRows: Int = 0,
@@ -17,10 +19,34 @@ public struct TerminalScrollableDocument:
             visibleRows: visibleRows
         )
         self.isFollowingEnd = followEnd
+        self.presentationState = nil
 
         if followEnd {
             viewport.moveToEnd()
         }
+    }
+
+    public static func == (
+        lhs: TerminalScrollableDocument,
+        rhs: TerminalScrollableDocument
+    ) -> Bool {
+        lhs.lines == rhs.lines
+            && lhs.viewport == rhs.viewport
+            && lhs.isFollowingEnd == rhs.isFollowingEnd
+    }
+
+    public func hash(
+        into hasher: inout Hasher
+    ) {
+        hasher.combine(
+            lines
+        )
+        hasher.combine(
+            viewport
+        )
+        hasher.combine(
+            isFollowingEnd
+        )
     }
 
     public var visibleLines: [String] {
@@ -114,13 +140,35 @@ public struct TerminalScrollableDocument:
         }
     }
 
-    public func render(
+    public mutating func render(
         into frame: inout TerminalFrame,
         in region: TerminalRegion
     ) {
+        if let presentationState,
+           presentationState.region == region {
+            frame.scrollRows(
+                in: region,
+                by:
+                    viewport.offset
+                    - presentationState.offset
+            )
+        }
+
+        presentationState = PresentationState(
+            region: region,
+            offset: viewport.offset
+        )
+
         frame.write(
             visibleLines,
             in: region
         )
+    }
+
+    private struct PresentationState:
+        Sendable
+    {
+        var region: TerminalRegion
+        var offset: Int
     }
 }

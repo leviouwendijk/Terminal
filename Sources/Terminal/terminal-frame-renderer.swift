@@ -32,26 +32,57 @@ public struct TerminalFrameRenderer:
             previous.rows != resolvedFrame.rows
                 || previous.columns != resolvedFrame.columns
         } ?? true
-        let rows = rowsToRender(
-            resolvedFrame,
-            requiresFullRender: requiresFullRender
-        )
+        var comparisonFrame = previousFrame
         var output: [String] = []
 
         if requiresFullRender {
             output.append(
                 ANSIColor.clearScreen.rawValue
             )
-        }
-
-        output.append(
-            contentsOf: rows.map {
-                renderRow(
-                    $0,
-                    frame: resolvedFrame
+        } else if var scrolledFrame = previousFrame {
+            for scroll in frame.scrolls {
+                output.append(
+                    scrollSequence(
+                        scroll
+                    )
+                )
+                scrolledFrame = applying(
+                    scroll,
+                    to: scrolledFrame
                 )
             }
+
+            comparisonFrame = scrolledFrame
+        }
+
+        let rows = rowsToRender(
+            resolvedFrame,
+            previousFrame: comparisonFrame,
+            requiresFullRender: requiresFullRender
         )
+
+        if !requiresFullRender,
+           !frame.scrolls.isEmpty,
+           let comparisonFrame {
+            output.append(
+                contentsOf: rows.map {
+                    renderChangedRow(
+                        $0,
+                        frame: resolvedFrame,
+                        previousFrame: comparisonFrame
+                    )
+                }
+            )
+        } else {
+            output.append(
+                contentsOf: rows.map {
+                    renderRow(
+                        $0,
+                        frame: resolvedFrame
+                    )
+                }
+            )
+        }
         output.append(
             cursorSequence(
                 resolvedFrame.cursor
@@ -90,6 +121,7 @@ public struct TerminalFrameRenderer:
 
     private func rowsToRender(
         _ frame: TerminalResolvedFrame,
+        previousFrame: TerminalResolvedFrame?,
         requiresFullRender: Bool
     ) -> [Int] {
         guard !requiresFullRender,
@@ -110,6 +142,119 @@ public struct TerminalFrameRenderer:
         }
     }
 
+    private func applying(
+        _ scroll: TerminalFrameScroll,
+        to frame: TerminalResolvedFrame
+    ) -> TerminalResolvedFrame {
+        let range = scroll.rowRange
+        var spans: [TerminalFrameSpan] = []
+
+        spans.reserveCapacity(
+            frame.spans.count
+        )
+
+        for span in frame.spans {
+            guard range.contains(
+                span.row
+            ) else {
+                spans.append(
+                    span
+                )
+                continue
+            }
+
+            let row = span.row - scroll.delta
+
+            guard range.contains(
+                row
+            ) else {
+                continue
+            }
+
+            var shifted = span
+            shifted.row = row
+            spans.append(
+                shifted
+            )
+        }
+
+        return TerminalResolvedFrame(
+            rows: frame.rows,
+            columns: frame.columns,
+            spans: spans,
+            cursor: frame.cursor
+        )
+    }
+
+    private func scrollSequence(
+        _ scroll: TerminalFrameScroll
+    ) -> String {
+        let amount = abs(
+            scroll.delta
+        )
+        let command = scroll.delta > 0
+            ? "S"
+            : "T"
+
+        return "\u{001B}[\(scroll.top + 1);\(scroll.bottom)r"
+            + "\u{001B}[\(amount)\(command)"
+            + "\u{001B}[r"
+    }
+
+    private func renderChangedRow(
+        _ row: Int,
+        frame: TerminalResolvedFrame,
+        previousFrame: TerminalResolvedFrame
+    ) -> String {
+        let previousSpans = previousFrame.spans(
+            inRow: row
+        )
+        let spans = frame.spans(
+            inRow: row
+        )
+
+        guard previousSpans.count == spans.count,
+              zip(
+                previousSpans,
+                spans
+              ).allSatisfy({
+                previous,
+                current in
+
+                previous.leading == current.leading
+                    && previous.columns == current.columns
+              }) else {
+            return renderRow(
+                row,
+                frame: frame
+            )
+        }
+
+        var output = [
+            ANSIColor.reset.rawValue,
+        ]
+
+        for (
+            previous,
+            span
+        ) in zip(
+            previousSpans,
+            spans
+        ) where previous.content != span.content {
+            output.append(
+                cursorPosition(
+                    line: row + 1,
+                    column: span.leading + 1
+                )
+            )
+            output.append(
+                span.content
+            )
+        }
+
+        return output.joined()
+    }
+
     private func renderRow(
         _ row: Int,
         frame: TerminalResolvedFrame
@@ -123,18 +268,24 @@ public struct TerminalFrameRenderer:
             ANSIColor.clearLine.rawValue,
         ]
 
+        var column = 0
+
         for span in frame.spans(
             inRow: row
         ) {
-            output.append(
-                cursorPosition(
-                    line: row + 1,
-                    column: span.leading + 1
+            if span.leading != column {
+                output.append(
+                    cursorPosition(
+                        line: row + 1,
+                        column: span.leading + 1
+                    )
                 )
-            )
+            }
+
             output.append(
                 span.content
             )
+            column = span.leading + span.columns
         }
 
         return output.joined()
