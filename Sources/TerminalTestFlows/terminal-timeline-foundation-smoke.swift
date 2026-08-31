@@ -69,9 +69,9 @@ enum TerminalTimelineFoundationSmoke {
         }
 
         guard layout.lines[mutateRows.lowerBound]
-                .contains("● mutate_files"),
+                .contains("✓ mutate_files"),
               layout.lines[buildRows.lowerBound]
-                .contains("> ● swift_build"),
+                .contains("> ✓ swift_build"),
               layout.lines[testRows.lowerBound]
                 .contains("◉ artest"),
               layout.lines[verifyRows.lowerBound]

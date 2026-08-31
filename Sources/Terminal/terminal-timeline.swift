@@ -56,14 +56,16 @@ public struct TerminalTimelineStyle:
 
     public init(
         selectionMarker: String = ">",
-        completedMarker: String = "●",
+        completedMarker: String = "✓",
         activeMarker: String = "◉",
         pendingMarker: String = "○",
         failedMarker: String = "×",
         skippedMarker: String = "─",
         connector: String = "│",
         selection: TerminalStyle = .bold,
-        completed: TerminalStyle = .none,
+        completed: TerminalStyle = TerminalStyle(
+            .green
+        ),
         active: TerminalStyle = .bold,
         pending: TerminalStyle = .dim,
         failed: TerminalStyle = TerminalStyle(

@@ -10,6 +10,7 @@ enum TerminalInteractionFoundationSmoke {
         case unexpectedDocumentScrollHint
         case unexpectedDocumentWordWrapping
         case unexpectedDocumentDisplayWrapping
+        case unexpectedDocumentANSIWrapping
         case unexpectedDocumentLayer
     }
 
@@ -234,6 +235,53 @@ enum TerminalInteractionFoundationSmoke {
             "xy",
         ] else {
             throw Failure.unexpectedDocumentDisplayWrapping
+        }
+
+        let styled =
+            TerminalStyle(
+                .green
+            ).apply(
+                "abcdef"
+            )
+            + "\n"
+            + TerminalStyle(
+                .red
+            ).apply(
+                "xy"
+            )
+        var ansiDocument = TerminalScrollableDocument()
+
+        ansiDocument.update(
+            text: styled,
+            columns: 3,
+            visibleRows: 4,
+            wrapping: .display
+        )
+
+        guard ansiDocument.lines.map({
+            stripANSI(
+                $0
+            )
+        }) == [
+            "abc",
+            "def",
+            "xy",
+        ],
+        ansiDocument.lines.map({
+            TerminalDisplay.width(
+                of: $0
+            )
+        }) == [
+            3,
+            3,
+            2,
+        ],
+        ansiDocument.lines.allSatisfy({
+            $0.contains(
+                "\u{001B}["
+            )
+        }) else {
+            throw Failure.unexpectedDocumentANSIWrapping
         }
 
         let nestedLayer = TerminalZIndex(

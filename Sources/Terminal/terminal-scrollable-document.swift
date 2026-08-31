@@ -93,10 +93,10 @@ public struct TerminalScrollableDocument:
 
         switch wrapping {
         case .display:
-            lines = TerminalTextLayout(
-                text: text,
+            lines = Self.displayLines(
+                text,
                 columns: columns
-            ).rows.map(\.content)
+            )
 
         case .word:
             lines = TerminalTextWrap.lines(
@@ -109,6 +109,49 @@ public struct TerminalScrollableDocument:
             lines: lines,
             visibleRows: visibleRows
         )
+    }
+
+    private static func displayLines(
+        _ text: String,
+        columns: Int
+    ) -> [String] {
+        text.split(
+            separator: "\n",
+            omittingEmptySubsequences: false
+        ).flatMap { rawLine -> [String] in
+            let line = String(
+                rawLine
+            )
+            let width = TerminalDisplay.width(
+                of: line
+            )
+
+            guard width > 0 else {
+                return [
+                    line,
+                ]
+            }
+
+            var lowerBound = 0
+            var lines: [String] = []
+
+            while lowerBound < width {
+                let upperBound = min(
+                    width,
+                    lowerBound + columns
+                )
+
+                lines.append(
+                    TerminalDisplay.slice(
+                        line,
+                        columns: lowerBound..<upperBound
+                    )
+                )
+                lowerBound = upperBound
+            }
+
+            return lines
+        }
     }
 
     public mutating func moveToStart() {

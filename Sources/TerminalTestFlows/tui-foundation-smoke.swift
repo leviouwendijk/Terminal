@@ -23,6 +23,7 @@ enum TerminalTUIFoundationSmoke {
         try runScrollableDocumentRevealProbe()
         try runTextInputProbe()
         try runDisplayProbe()
+        try TerminalStyledTextFoundationSmoke.run()
         try runBlockWrapProbe()
         try runDifferenceEndOfFileProbe()
         try runFrameProbe()
