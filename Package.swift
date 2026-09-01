@@ -13,6 +13,10 @@ let package = Package(
             name: "Terminal",
             targets: ["Terminal"]
         ),
+        .library(
+            name: "TerminalStructuredContent",
+            targets: ["TerminalStructuredContent"]
+        ),
         .executable(
             name: "termtest",
             targets: [
@@ -24,6 +28,7 @@ let package = Package(
         .package(url: "https://github.com/leviouwendijk/ANSI", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Difference", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Strings", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/DSL", branch: "master"),
 
     ],
     targets: [
@@ -35,10 +40,25 @@ let package = Package(
                 .product(name: "Strings", package: "Strings"),
             ],
         ),
+        .target(
+            name: "TerminalStructuredContent",
+            dependencies: [
+                "Terminal",
+                .product(
+                    name: "DSL",
+                    package: "DSL"
+                ),
+            ]
+        ),
         .executableTarget(
             name: "TerminalTestFlows",
             dependencies: [
                 "Terminal",
+                "TerminalStructuredContent",
+                .product(
+                    name: "DSL",
+                    package: "DSL"
+                ),
                 .product(
                     name: "Difference",
                     package: "Difference"

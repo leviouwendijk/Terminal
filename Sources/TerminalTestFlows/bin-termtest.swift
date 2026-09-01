@@ -13,6 +13,7 @@ enum TerminalTestCommand: String {
     case frame
     case shell
     case overlay
+    case structuredContent = "structured-content"
     case stdinTerminal = "stdin-terminal"
     case styleLines = "style-lines"
     case choice
@@ -82,6 +83,9 @@ struct TerminalTest {
             case .overlay:
                 try TerminalOverlaySmoke.run()
 
+            case .structuredContent:
+                try TerminalStructuredContentSmoke.run()
+
             case .styleLines:
                 try TerminalStyleLinesSmoke.run()
 
@@ -128,6 +132,7 @@ struct TerminalTest {
                 swift run termtest frame
                 swift run termtest shell
                 swift run termtest overlay
+                swift run termtest structured-content
                 swift run termtest stdin-terminal
                 swift run termtest style-lines
                 swift run termtest choice
@@ -146,6 +151,7 @@ struct TerminalTest {
                 frame          Inspect persistent dirty-row frame composition interactively.
                 shell          Run the persistent interactive shell composition laboratory.
                 overlay        Inspect centered modal and trailing side-sheet focus capture.
+                structured-content Render recursive DSL content with nested formatting.
                 stdin-terminal Reconnect standard input to the controlling terminal.
                 style-lines    Verify independently styled/reset terminal rows.
                 choice        Probe the high-level default-aware choice interface.
