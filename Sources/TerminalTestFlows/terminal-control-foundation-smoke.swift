@@ -7,12 +7,16 @@ enum TerminalControlFoundationSmoke {
         case unexpectedFocus
         case unexpectedList
         case unexpectedComposer
+        case unexpectedAction
+        case unexpectedLevelMeter
     }
 
     static func run() throws {
         try runFocusProbe()
         try runListProbe()
         try runComposerProbe()
+        try runActionProbe()
+        try runLevelMeterProbe()
     }
 
     private static func runFocusProbe() throws {
@@ -87,6 +91,70 @@ enum TerminalControlFoundationSmoke {
             inRow: 2
         ).first?.content == "> 3" else {
             throw Failure.unexpectedList
+        }
+    }
+
+    private static func runActionProbe() throws {
+        let action = TerminalActionControl(
+            symbol: "●",
+            label: "voice"
+        )
+
+        guard action.handle(
+            .enter
+        ) == .accepted,
+              action.handle(
+                .space
+              ) == .accepted,
+              stripANSI(
+                action.render(
+                    focused: true
+                )
+              ) == "[● voice]"
+        else {
+            throw Failure.unexpectedAction
+        }
+
+        let disabled = TerminalActionControl(
+            symbol: "●",
+            isEnabled: false
+        )
+
+        guard disabled.handle(
+            .enter
+        ) == nil else {
+            throw Failure.unexpectedAction
+        }
+    }
+
+    private static func runLevelMeterProbe() throws {
+        var meter = TerminalLevelMeter(
+            capacity: 2
+        )
+
+        meter.append(
+            0
+        )
+        meter.append(
+            1
+        )
+
+        guard meter.render() == "▁█" else {
+            throw Failure.unexpectedLevelMeter
+        }
+
+        meter.append(
+            0.5
+        )
+
+        guard meter.values.count == 2 else {
+            throw Failure.unexpectedLevelMeter
+        }
+
+        meter.reset()
+
+        guard meter.render().isEmpty else {
+            throw Failure.unexpectedLevelMeter
         }
     }
 
