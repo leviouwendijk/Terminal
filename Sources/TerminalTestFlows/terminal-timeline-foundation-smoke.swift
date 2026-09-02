@@ -10,6 +10,9 @@ enum TerminalTimelineFoundationSmoke {
         case test
         case verify
         case diff
+        case branchRepair
+        case branchBuild
+        case suffix
     }
 
     static func run() throws {
@@ -110,6 +113,73 @@ enum TerminalTimelineFoundationSmoke {
                     .joined(
                         separator: " | "
                     )
+            )
+        }
+
+        let groupedTimeline = TerminalTimeline(
+            items: [
+                TerminalTimelineItem(
+                    id: Step.verify,
+                    title: "swift_build",
+                    state: .failed
+                ),
+                TerminalTimelineItem(
+                    id: Step.branchRepair,
+                    title: "mutate_files",
+                    state: .completed,
+                    groups: [
+                        "on failure",
+                    ]
+                ),
+                TerminalTimelineItem(
+                    id: Step.branchBuild,
+                    title: "swift_build",
+                    state: .completed,
+                    groups: [
+                        "on failure",
+                    ]
+                ),
+                TerminalTimelineItem(
+                    id: Step.suffix,
+                    title: "git_diff",
+                    state: .pending
+                ),
+            ],
+            style: .plain
+        )
+        let groupedLayout = groupedTimeline.layout(
+            width: 24,
+            selectedID: .branchRepair
+        )
+
+        guard let repairRows = groupedLayout.itemRows[.branchRepair],
+              let branchBuildRows = groupedLayout.itemRows[.branchBuild],
+              let suffixRows = groupedLayout.itemRows[.suffix],
+              let groupHeader = groupedLayout.lines.firstIndex(
+                where: {
+                    $0.contains(
+                        "└─ on failure"
+                    )
+                }
+              ),
+              groupHeader < repairRows.lowerBound,
+              groupedLayout.lines[repairRows.lowerBound]
+                .hasPrefix("   > ✓ mutate_files"),
+              groupedLayout.lines[branchBuildRows.lowerBound]
+                .hasPrefix("     ✓ swift_build"),
+              suffixRows.lowerBound > branchBuildRows.lowerBound,
+              groupedLayout.lines[suffixRows.lowerBound - 1] == "  │",
+              groupedLayout.lines.allSatisfy({
+                  TerminalDisplay.width(
+                      of: $0
+                  ) <= 24
+              }) else {
+            throw TerminalTestFailure(
+                probe: "TerminalTimeline nested group rendering",
+                expectation: "group header and nested branch rows remain non-selectable, indented, and width-stable",
+                observed: groupedLayout.lines.joined(
+                    separator: " | "
+                )
             )
         }
     }

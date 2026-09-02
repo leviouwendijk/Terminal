@@ -19,17 +19,20 @@ public struct TerminalTimelineItem<
     public var title: String
     public var detail: String?
     public var state: TerminalTimelineItemState
+    public var groups: [String]
 
     public init(
         id: ID,
         title: String,
         detail: String? = nil,
-        state: TerminalTimelineItemState
+        state: TerminalTimelineItemState,
+        groups: [String] = []
     ) {
         self.id = id
         self.title = title
         self.detail = detail
         self.state = state
+        self.groups = groups
     }
 }
 
@@ -44,6 +47,8 @@ public struct TerminalTimelineStyle:
     public var failedMarker: String
     public var skippedMarker: String
     public var connector: String
+    public var groupBranch: String
+    public var groupIndent: Int
 
     public var selection: TerminalStyle
     public var completed: TerminalStyle
@@ -53,6 +58,7 @@ public struct TerminalTimelineStyle:
     public var skipped: TerminalStyle
     public var detail: TerminalStyle
     public var connectorStyle: TerminalStyle
+    public var group: TerminalStyle
 
     public init(
         selectionMarker: String = ">",
@@ -62,6 +68,8 @@ public struct TerminalTimelineStyle:
         failedMarker: String = "×",
         skippedMarker: String = "─",
         connector: String = "│",
+        groupBranch: String = "└─",
+        groupIndent: Int = 3,
         selection: TerminalStyle = .bold,
         completed: TerminalStyle = TerminalStyle(
             .green
@@ -74,7 +82,8 @@ public struct TerminalTimelineStyle:
         ),
         skipped: TerminalStyle = .dim,
         detail: TerminalStyle = .dim,
-        connectorStyle: TerminalStyle = .dim
+        connectorStyle: TerminalStyle = .dim,
+        group: TerminalStyle = .dim
     ) {
         self.selectionMarker = selectionMarker
         self.completedMarker = completedMarker
@@ -83,6 +92,11 @@ public struct TerminalTimelineStyle:
         self.failedMarker = failedMarker
         self.skippedMarker = skippedMarker
         self.connector = connector
+        self.groupBranch = groupBranch
+        self.groupIndent = max(
+            0,
+            groupIndent
+        )
         self.selection = selection
         self.completed = completed
         self.active = active
@@ -91,6 +105,7 @@ public struct TerminalTimelineStyle:
         self.skipped = skipped
         self.detail = detail
         self.connectorStyle = connectorStyle
+        self.group = group
     }
 
     public static let standard =
@@ -105,7 +120,8 @@ public struct TerminalTimelineStyle:
             failed: .none,
             skipped: .none,
             detail: .none,
-            connectorStyle: .none
+            connectorStyle: .none,
+            group: .none
         )
 }
 
@@ -151,17 +167,48 @@ public struct TerminalTimeline<
             0,
             width
         )
-        let textWidth = max(
-            1,
-            width - 4
-        )
         var lines: [String] = []
         var itemRows: [ID: Range<Int>] = [:]
+        var previousGroups: [String] = []
 
         for (
             index,
             item
         ) in items.enumerated() {
+            let sharedDepth = commonGroupDepth(
+                previousGroups,
+                item.groups
+            )
+
+            if item.groups.count > sharedDepth {
+                for depth in sharedDepth..<item.groups.count {
+                    append(
+                        groupIndentation(
+                            depth: depth
+                        )
+                            + "  "
+                            + style.group.apply(
+                                style.groupBranch
+                                    + " "
+                                    + item.groups[depth]
+                            ),
+                        width: width,
+                        to: &lines
+                    )
+                }
+            }
+
+            let indentation = groupIndentation(
+                depth: item.groups.count
+            )
+            let textWidth = max(
+                1,
+                width
+                    - TerminalDisplay.width(
+                        of: indentation
+                    )
+                    - 4
+            )
             let start = lines.count
             let selected = item.id == selectedID
             let itemStyle = stateStyle(
@@ -207,7 +254,8 @@ public struct TerminalTimeline<
 
             if let first = titleLines.first {
                 append(
-                    selection
+                    indentation
+                        + selection
                         + " "
                         + itemStyle.apply(
                             marker
@@ -223,7 +271,8 @@ public struct TerminalTimeline<
 
             for line in titleLines.dropFirst() {
                 append(
-                    "  "
+                    indentation
+                        + "  "
                         + connector
                         + " "
                         + titleStyle.apply(
@@ -241,7 +290,8 @@ public struct TerminalTimeline<
                     width: textWidth
                 ) {
                     append(
-                        "  "
+                        indentation
+                            + "  "
                             + connector
                             + " "
                             + style.detail.apply(
@@ -257,12 +307,23 @@ public struct TerminalTimeline<
                 start..<lines.count
 
             if index < items.count - 1 {
+                let connectorDepth = commonGroupDepth(
+                    item.groups,
+                    items[index + 1].groups
+                )
+
                 append(
-                    "  " + connector,
+                    groupIndentation(
+                        depth: connectorDepth
+                    )
+                        + "  "
+                        + connector,
                     width: width,
                     to: &lines
                 )
             }
+
+            previousGroups = item.groups
         }
 
         return TerminalTimelineLayout(
@@ -337,6 +398,34 @@ public struct TerminalTimeline<
         case .skipped:
             return style.skipped
         }
+    }
+
+    private func commonGroupDepth(
+        _ lhs: [String],
+        _ rhs: [String]
+    ) -> Int {
+        var depth = 0
+
+        while depth < lhs.count,
+              depth < rhs.count,
+              lhs[depth] == rhs[depth]
+        {
+            depth += 1
+        }
+
+        return depth
+    }
+
+    private func groupIndentation(
+        depth: Int
+    ) -> String {
+        String(
+            repeating: " ",
+            count: max(
+                0,
+                depth
+            ) * style.groupIndent
+        )
     }
 
     private func append(
