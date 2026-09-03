@@ -9,6 +9,7 @@ enum TerminalTestCommand: String {
     case menuChain = "menu-chain"
     case listReview = "list-review"
     case navigation
+    case settings
     case tuiFoundation = "tui-foundation"
     case frame
     case shell
@@ -71,6 +72,9 @@ struct TerminalTest {
             case .navigation:
                 try TerminalNavigationSmoke.run()
 
+            case .settings:
+                try TerminalSettingsMenuSmoke.run()
+
             case .tuiFoundation:
                 try TerminalTUIFoundationSmoke.run()
 
@@ -128,6 +132,7 @@ struct TerminalTest {
                 swift run termtest menu-chain
                 swift run termtest list-review
                 swift run termtest navigation
+                swift run termtest settings
                 swift run termtest tui-foundation
                 swift run termtest frame
                 swift run termtest shell
@@ -147,6 +152,7 @@ struct TerminalTest {
                 menu-chain    Pick an action, then optionally pick a follow-up.
                 list-review   Multi-select review list with colored collapsed summary.
                 navigation     Verify shared navigation defaults.
+                settings       Verify reusable settings-menu navigation and rendering.
                 tui-foundation Verify reusable TUI state, display, frame, and layout primitives.
                 frame          Inspect persistent dirty-row frame composition interactively.
                 shell          Run the persistent interactive shell composition laboratory.
