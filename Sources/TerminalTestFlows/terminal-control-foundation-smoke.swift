@@ -9,6 +9,7 @@ enum TerminalControlFoundationSmoke {
         case unexpectedComposer
         case unexpectedAction
         case unexpectedLevelMeter
+        case unexpectedSpinner
     }
 
     static func run() throws {
@@ -17,6 +18,7 @@ enum TerminalControlFoundationSmoke {
         try runComposerProbe()
         try runActionProbe()
         try runLevelMeterProbe()
+        try runSpinnerProbe()
     }
 
     private static func runFocusProbe() throws {
@@ -155,6 +157,44 @@ enum TerminalControlFoundationSmoke {
 
         guard meter.render().isEmpty else {
             throw Failure.unexpectedLevelMeter
+        }
+    }
+
+    private static func runSpinnerProbe() throws {
+        var state = TerminalSpinnerState()
+
+        guard state.currentFrame == "⠋" else {
+            throw Failure.unexpectedSpinner
+        }
+
+        _ = state.advance()
+
+        guard state.currentFrame == "⠙" else {
+            throw Failure.unexpectedSpinner
+        }
+
+        state.reset()
+
+        guard state.currentFrame == "⠋" else {
+            throw Failure.unexpectedSpinner
+        }
+
+        var control = TerminalSpinnerControl(
+            label: "working"
+        )
+
+        let first = control.render()
+
+        guard first.contains("⠋"),
+              first.contains("working")
+        else {
+            throw Failure.unexpectedSpinner
+        }
+
+        _ = control.advance()
+
+        guard control.render().contains("⠙") else {
+            throw Failure.unexpectedSpinner
         }
     }
 

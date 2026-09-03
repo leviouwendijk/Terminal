@@ -1,26 +1,29 @@
 import Foundation
 
 public actor LiveSpinner {
-    private let frames = ["⠋","⠙","⠹","⠸","⠼","⠴","⠦","⠧","⠇","⠏"]
-    private var index: Int = 0
     private var task: Task<Void, Never>?
 
     public init() {}
 
     public func start(line: String) {
-        guard task == nil else { return }
+        guard task == nil else {
+            return
+        }
 
         Terminal.hideCursor()
 
-        let frames = self.frames
+        task = Task.detached {
+            var spinner = TerminalSpinnerState()
 
-        task = Task.detached { [frames] in
-            var i = 0
             while !Task.isCancelled {
-                let frame = frames[i % frames.count]
-                i += 1
-                Terminal.writeInline("\(frame) \(line)")
-                try? await Task.sleep(nanoseconds: 90_000_000)
+                Terminal.writeInline(
+                    "\(spinner.currentFrame) \(line)"
+                )
+                spinner.advance()
+
+                try? await Task.sleep(
+                    nanoseconds: 90_000_000
+                )
             }
         }
     }
