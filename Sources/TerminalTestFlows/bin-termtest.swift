@@ -14,6 +14,7 @@ enum TerminalTestCommand: String {
     case frame
     case shell
     case overlay
+    case card
     case structuredContent = "structured-content"
     case stdinTerminal = "stdin-terminal"
     case styleLines = "style-lines"
@@ -87,6 +88,9 @@ struct TerminalTest {
             case .overlay:
                 try TerminalOverlaySmoke.run()
 
+            case .card:
+                try TerminalInteractiveBlockSmoke.run()
+
             case .structuredContent:
                 try TerminalStructuredContentSmoke.run()
 
@@ -157,6 +161,7 @@ struct TerminalTest {
                 frame          Inspect persistent dirty-row frame composition interactively.
                 shell          Run the persistent interactive shell composition laboratory.
                 overlay        Inspect centered modal and trailing side-sheet focus capture.
+                card           Inspect the generic interactive attached-block primitive.
                 structured-content Render recursive DSL content with nested formatting.
                 stdin-terminal Reconnect standard input to the controlling terminal.
                 style-lines    Verify independently styled/reset terminal rows.

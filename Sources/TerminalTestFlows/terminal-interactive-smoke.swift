@@ -572,3 +572,251 @@ enum TerminalInteractiveSmoke {
         ]
     }
 }
+
+enum TerminalInteractiveBlockSmoke {
+    enum Failure:
+        Error
+    {
+        case unexpectedResolvedState
+        case unexpectedRoundedBorder
+        case unexpectedWidth
+        case unexpectedHitRegion
+    }
+
+    static func run() throws {
+        try proveFoundation()
+
+        let stream = TerminalStream.standardError
+        let session = try TerminalSession(
+            options: TerminalSession.Options(
+                useAlternateScreen: true,
+                hideCursor: true,
+                useRawMode: true,
+                restoreOnInterrupt: true,
+                outputStream: stream
+            )
+        )
+
+        defer {
+            session.restore()
+        }
+
+        let reader = TerminalKeyReader()
+        var renderer = TerminalFrameRenderer(
+            stream: stream
+        )
+        let states = TerminalInteractiveBlockState.allCases
+        var selectedState = 1
+        var lastActivation = "none"
+
+        while true {
+            let size = Terminal.size(
+                for: stream
+            )
+            var frame = TerminalFrame(
+                rows: size.rows,
+                columns: size.columns
+            )
+            let root = TerminalRegion(
+                rows: size.rows,
+                columns: size.columns
+            ).inset(
+                by: TerminalInsets(
+                    vertical: 1,
+                    horizontal: 2
+                )
+            )
+
+            if !root.isEmpty {
+                frame.write(
+                    [
+                        TerminalStyle.bold.apply(
+                            "Interactive attached block"
+                        ),
+                        TerminalStyle.dim.apply(
+                            "j/k choose presentation state · enter activate · q close"
+                        ),
+                    ],
+                    in: TerminalRegion(
+                        top: root.top,
+                        leading: root.leading,
+                        rows: min(
+                            2,
+                            root.rows
+                        ),
+                        columns: root.columns
+                    )
+                )
+
+                let cardColumns = min(
+                    72,
+                    root.columns
+                )
+                let cardRows = max(
+                    0,
+                    min(
+                        9,
+                        root.rows - 4
+                    )
+                )
+                let cardRegion = TerminalRegion(
+                    top: root.top + min(2, root.rows),
+                    leading: root.leading,
+                    rows: cardRows,
+                    columns: cardColumns
+                )
+                let state = states[selectedState]
+                let card = TerminalInteractiveBlock(
+                    title: "Run · approval required",
+                    body: [
+                        "Stage 3 of 6 · mutate_files",
+                        "2 files · +18 -7",
+                        "Human review required",
+                    ].joined(separator: "\n"),
+                    hint: "Enter for actions",
+                    state: state
+                )
+
+                _ = card.render(
+                    into: &frame,
+                    in: cardRegion,
+                    zIndex: .overlay
+                )
+
+                if root.rows >= 2 {
+                    frame.write(
+                        TerminalStyle.dim.apply(
+                            "state \(state.rawValue) · last activation \(lastActivation)"
+                        ),
+                        in: TerminalRegion(
+                            top: root.bottom - 1,
+                            leading: root.leading,
+                            rows: 1,
+                            columns: root.columns
+                        )
+                    )
+                }
+            }
+
+            renderer.render(
+                frame
+            )
+
+            guard let key = reader.readKey(
+                timeoutMilliseconds: 100
+            ) else {
+                continue
+            }
+
+            switch key {
+            case .char("q"),
+                 .escape:
+                return
+
+            case .up,
+                 .char("k"):
+                selectedState =
+                    (selectedState + states.count - 1)
+                    % states.count
+
+            case .down,
+                 .char("j"):
+                selectedState =
+                    (selectedState + 1)
+                    % states.count
+
+            case .enter:
+                let state = states[selectedState]
+                lastActivation = state == .disabled
+                    ? "blocked (disabled)"
+                    : "accepted \(state.rawValue)"
+
+            default:
+                continue
+            }
+        }
+    }
+
+    private static func proveFoundation() throws {
+        guard TerminalInteractiveBlock.resolvedState(
+            isEnabled: false,
+            isFocused: true,
+            isHovered: true,
+            isActive: true
+        ) == .disabled,
+              TerminalInteractiveBlock.resolvedState(
+                isFocused: true,
+                isHovered: true
+              ) == .focused,
+              TerminalInteractiveBlock.resolvedState(
+                isHovered: true
+              ) == .hovered,
+              TerminalInteractiveBlock.resolvedState(
+                isActive: true
+              ) == .active
+        else {
+            throw Failure.unexpectedResolvedState
+        }
+
+        let block = TerminalInteractiveBlock(
+            title: "Run · awaiting review",
+            body: "Stage 3 of 6 · mutate_files",
+            hint: "Enter for actions",
+            state: .focused
+        )
+        let rendered = block.render(
+            width: 48
+        )
+
+        guard let first = rendered.first,
+              let last = rendered.last,
+              stripANSI(first).hasPrefix("╭"),
+              stripANSI(first).hasSuffix("╮"),
+              stripANSI(last).hasPrefix("╰"),
+              stripANSI(last).hasSuffix("╯")
+        else {
+            throw Failure.unexpectedRoundedBorder
+        }
+
+        guard rendered.allSatisfy({ line in
+            TerminalDisplay.width(
+                of: line
+            ) == 48
+        }) else {
+            throw Failure.unexpectedWidth
+        }
+
+        let container = TerminalRegion(
+            top: 4,
+            leading: 8,
+            rows: 10,
+            columns: 48
+        )
+        let hitRegion = block.hitRegion(
+            in: container
+        )
+
+        guard hitRegion.top == 4,
+              hitRegion.leading == 8,
+              hitRegion.columns == 48,
+              hitRegion.rows == rendered.count,
+              block.contains(
+                row: hitRegion.top,
+                column: hitRegion.leading,
+                in: container
+              ),
+              block.contains(
+                row: hitRegion.bottom - 1,
+                column: hitRegion.trailing - 1,
+                in: container
+              ),
+              !block.contains(
+                row: hitRegion.bottom,
+                column: hitRegion.leading,
+                in: container
+              )
+        else {
+            throw Failure.unexpectedHitRegion
+        }
+    }
+}
