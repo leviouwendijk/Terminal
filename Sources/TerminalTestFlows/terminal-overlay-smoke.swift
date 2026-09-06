@@ -190,6 +190,9 @@ private enum TerminalOverlaySmokeTimelineStep:
         case .completed:
             return "completed"
 
+        case .warning:
+            return "warning"
+
         case .failed:
             return "failed"
 

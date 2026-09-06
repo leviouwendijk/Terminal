@@ -5,6 +5,7 @@ public enum TerminalTimelineItemState:
     case pending
     case active
     case completed
+    case warning
     case failed
     case skipped
 }
@@ -44,6 +45,7 @@ public struct TerminalTimelineStyle:
     public var completedMarker: String
     public var activeMarker: String
     public var pendingMarker: String
+    public var warningMarker: String
     public var failedMarker: String
     public var skippedMarker: String
     public var connector: String
@@ -54,6 +56,7 @@ public struct TerminalTimelineStyle:
     public var completed: TerminalStyle
     public var active: TerminalStyle
     public var pending: TerminalStyle
+    public var warning: TerminalStyle
     public var failed: TerminalStyle
     public var skipped: TerminalStyle
     public var detail: TerminalStyle
@@ -65,6 +68,7 @@ public struct TerminalTimelineStyle:
         completedMarker: String = "✓",
         activeMarker: String = "◉",
         pendingMarker: String = "○",
+        warningMarker: String = "!",
         failedMarker: String = "×",
         skippedMarker: String = "─",
         connector: String = "│",
@@ -76,6 +80,9 @@ public struct TerminalTimelineStyle:
         ),
         active: TerminalStyle = .bold,
         pending: TerminalStyle = .dim,
+        warning: TerminalStyle = TerminalStyle(
+            .yellow
+        ),
         failed: TerminalStyle = TerminalStyle(
             .bold,
             .red
@@ -89,6 +96,7 @@ public struct TerminalTimelineStyle:
         self.completedMarker = completedMarker
         self.activeMarker = activeMarker
         self.pendingMarker = pendingMarker
+        self.warningMarker = warningMarker
         self.failedMarker = failedMarker
         self.skippedMarker = skippedMarker
         self.connector = connector
@@ -101,6 +109,7 @@ public struct TerminalTimelineStyle:
         self.completed = completed
         self.active = active
         self.pending = pending
+        self.warning = warning
         self.failed = failed
         self.skipped = skipped
         self.detail = detail
@@ -117,6 +126,7 @@ public struct TerminalTimelineStyle:
             completed: .none,
             active: .none,
             pending: .none,
+            warning: .none,
             failed: .none,
             skipped: .none,
             detail: .none,
@@ -369,6 +379,9 @@ public struct TerminalTimeline<
         case .completed:
             return style.completedMarker
 
+        case .warning:
+            return style.warningMarker
+
         case .failed:
             return style.failedMarker
 
@@ -389,6 +402,9 @@ public struct TerminalTimeline<
 
         case .completed:
             return style.completed
+
+        case .warning:
+            return style.warning
 
         case .failed:
             return style.failed
