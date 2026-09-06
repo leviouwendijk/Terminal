@@ -68,7 +68,7 @@ private extension TerminalStructuredContent.Renderer {
             text.append(character)
             let upper = text.count
 
-            for style in styles where !style.codes.isEmpty {
+            for style in styles where !style.isEmpty {
                 if let index = spans.lastIndex(
                     where: {
                         $0.style == style

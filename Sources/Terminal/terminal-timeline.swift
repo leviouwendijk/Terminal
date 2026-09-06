@@ -215,10 +215,8 @@ public struct TerminalTimeline<
                 for: item.state
             )
             let titleStyle = selected
-                ? TerminalStyle(
-                    codes:
-                        style.selection.codes
-                        + itemStyle.codes
+                ? style.selection.merging(
+                    itemStyle
                 )
                 : itemStyle
             let marker = TerminalDisplay.fitted(

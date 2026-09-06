@@ -154,21 +154,19 @@ public struct TerminalStyledText:
             return content
         }
 
-        var codes = style.codes
+        var resolvedStyle = style
 
         for span in spans where
             span.sourceRange.overlaps(
                 sourceRange
             )
         {
-            codes.append(
-                contentsOf: span.style.codes
+            resolvedStyle = resolvedStyle.merging(
+                span.style
             )
         }
 
-        return TerminalStyle(
-            codes: codes
-        ).apply(
+        return resolvedStyle.apply(
             content
         )
     }
