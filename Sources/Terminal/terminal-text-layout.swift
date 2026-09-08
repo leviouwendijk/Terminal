@@ -3,15 +3,24 @@ public struct TerminalTextLayoutRow:
     Hashable
 {
     public var sourceRange: Range<Int>
+    public var sourceLineNumber: Int
+    public var isSourceLineStart: Bool
     public var content: String
     public var columnOffsets: [Int]
 
     public init(
         sourceRange: Range<Int>,
+        sourceLineNumber: Int = 1,
+        isSourceLineStart: Bool = true,
         content: String,
         columnOffsets: [Int]
     ) {
         self.sourceRange = sourceRange
+        self.sourceLineNumber = max(
+            1,
+            sourceLineNumber
+        )
+        self.isSourceLineStart = isSourceLineStart
         self.content = content
         self.columnOffsets = columnOffsets
     }
@@ -150,6 +159,8 @@ public struct TerminalTextLayout:
         )
         var rowIndex = 0
         var rowStart = 0
+        var sourceLineNumber = 1
+        var isSourceLineStart = true
         var content = ""
         var columnOffsets = [
             0,
@@ -162,11 +173,14 @@ public struct TerminalTextLayout:
             rows.append(
                 TerminalTextLayoutRow(
                     sourceRange: rowStart..<endOffset,
+                    sourceLineNumber: sourceLineNumber,
+                    isSourceLineStart: isSourceLineStart,
                     content: content,
                     columnOffsets: columnOffsets
                 )
             )
             rowIndex += 1
+            isSourceLineStart = false
             content = ""
             columnOffsets = [
                 0,
@@ -186,6 +200,8 @@ public struct TerminalTextLayout:
                     endOffset: offset
                 )
                 rowStart = offset + 1
+                sourceLineNumber += 1
+                isSourceLineStart = true
                 positions[offset + 1] = TerminalTextPosition(
                     row: rowIndex,
                     column: 0
@@ -250,6 +266,8 @@ public struct TerminalTextLayout:
         rows.append(
             TerminalTextLayoutRow(
                 sourceRange: rowStart..<characters.count,
+                sourceLineNumber: sourceLineNumber,
+                isSourceLineStart: isSourceLineStart,
                 content: content,
                 columnOffsets: columnOffsets
             )

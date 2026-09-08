@@ -31,6 +31,14 @@ enum TerminalTextSurfaceLab {
                 minimumRows: 1,
                 maximumRows: 6
             ),
+            expandedEditorPresentation: TerminalTextEditorPresentation(
+                lineNumbers: .hybrid,
+                indentationGuides: TerminalIndentationGuideOptions(
+                    isEnabled: true,
+                    width: 4,
+                    glyph: "│"
+                )
+            ),
             placeholder: "type here..."
         )
         var size = Terminal.size(

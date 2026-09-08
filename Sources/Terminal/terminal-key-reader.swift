@@ -324,6 +324,24 @@ public struct TerminalKeyReader: Sendable {
             )
         }
 
+        if modifiers.contains(
+            .shift
+        ),
+        (97...122).contains(
+            keyCode
+        ),
+        let scalar = UnicodeScalar(
+            UInt32(
+                keyCode
+            )
+        ) {
+            return .char(
+                String(
+                    scalar
+                ).uppercased()
+            )
+        }
+
         if keyCode >= 0x20,
            let scalar = UnicodeScalar(
             UInt32(

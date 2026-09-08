@@ -1346,6 +1346,82 @@ enum TerminalTextEditorFoundationSmoke {
             throw Failure.unexpectedSelection
         }
 
+        var renderingEditor = TerminalTextEditor(
+            text: "alpha\n\nbeta",
+            cursorOffset: 6,
+            visibleRows: 3,
+            clipboard: .disabled
+        )
+        _ = renderingEditor.handle(
+            .char("V")
+        )
+        _ = renderingEditor.handle(
+            .char("j")
+        )
+
+        var selectionFrame = TerminalFrame(
+            rows: 3,
+            columns: 8
+        )
+        renderingEditor.render(
+            into: &selectionFrame,
+            in: TerminalRegion(
+                rows: 3,
+                columns: 8
+            )
+        )
+
+        let unselectedContent = selectionFrame.spans(
+            inRow: 0
+        )
+            .map(\.content)
+            .joined()
+        let blankSelectedContent = selectionFrame.spans(
+            inRow: 1
+        )
+            .map(\.content)
+            .joined()
+        let selectedContent = selectionFrame.spans(
+            inRow: 2
+        )
+            .map(\.content)
+            .joined()
+        let selectionForeground = ANSIColor.rgb(
+            208,
+            208,
+            208
+        )
+        let selectionBackground = ANSIColor.rgb(
+            58,
+            61,
+            67,
+            true
+        )
+
+        guard !unselectedContent.contains(
+            selectionBackground
+        ),
+        blankSelectedContent.contains(
+            selectionForeground
+        ),
+        blankSelectedContent.contains(
+            selectionBackground
+        ),
+        stripANSI(
+            blankSelectedContent
+        ) == String(
+            repeating: " ",
+            count: 8
+        ),
+        selectedContent.contains(
+            selectionBackground
+        ),
+        stripANSI(
+            selectedContent
+        ) == "beta    " else {
+            throw Failure.unexpectedRender
+        }
+
         guard editor.handle(
             .char("y")
         ) == .copied(
@@ -1711,7 +1787,12 @@ enum TerminalTextEditorFoundationSmoke {
                 .map(\.content)
                 .joined()
                 .contains(
-                    ANSIColor.inverse.rawValue
+                    ANSIColor.rgb(
+                        58,
+                        61,
+                        67,
+                        true
+                    )
                 )
         }) else {
             throw Failure.unexpectedRender

@@ -367,6 +367,22 @@ enum TerminalOverlaySmoke {
                 minimumRows: 1,
                 maximumRows: 6
             ),
+            compactEditorPresentation: TerminalTextEditorPresentation(
+                lineNumbers: .hybrid,
+                indentationGuides: TerminalIndentationGuideOptions(
+                    isEnabled: true,
+                    width: 4,
+                    glyph: "│"
+                )
+            ),
+            expandedEditorPresentation: TerminalTextEditorPresentation(
+                lineNumbers: .hybrid,
+                indentationGuides: TerminalIndentationGuideOptions(
+                    isEnabled: true,
+                    width: 4,
+                    glyph: "│"
+                )
+            ),
             placeholder: "type a message..."
         )
         var commandLine = TerminalCommandLine()

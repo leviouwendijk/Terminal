@@ -108,6 +108,7 @@ enum TerminalInputFoundationSmoke {
             + "\u{001B}[97;1;97u"
             + "\u{001B}[57442;5u"
             + "\u{001B}[99;5u"
+            + "\u{001B}[118;2u"
 
         try withReader(
             bytes: Array(
@@ -137,6 +138,12 @@ enum TerminalInputFoundationSmoke {
                     TerminalKeyStroke(
                         key: .control("C"),
                         modifiers: .control
+                    )
+                  ),
+                  reader.readEvent() == .keyStroke(
+                    TerminalKeyStroke(
+                        key: .char("V"),
+                        modifiers: .shift
                     )
                   ) else {
                 throw Failure.unexpectedKeyStroke

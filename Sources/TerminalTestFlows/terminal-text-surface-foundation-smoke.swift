@@ -10,6 +10,12 @@ enum TerminalTextSurfaceFoundationSmoke {
             sizePolicy: TerminalTextSurfaceSizePolicy(
                 minimumRows: 1,
                 maximumRows: 3
+            ),
+            expandedEditorPresentation: TerminalTextEditorPresentation(
+                lineNumbers: .hybrid,
+                indentationGuides: TerminalIndentationGuideOptions(
+                    isEnabled: true
+                )
             )
         )
 
@@ -86,6 +92,17 @@ enum TerminalTextSurfaceFoundationSmoke {
             .expanded
         )
 
+        guard surface.editorPresentation.lineNumbers == .hybrid,
+              surface.editorPresentation.indentationGuides.isEnabled else {
+            throw TerminalTestFailure(
+                probe: "text surface expanded editor presentation",
+                expectation: "hybrid line numbers and indentation guides",
+                observed: String(
+                    describing: surface.editorPresentation
+                )
+            )
+        }
+
         guard surface.resolvedRows(
             columns: 4,
             availableRows: 8
@@ -100,6 +117,17 @@ enum TerminalTextSurfaceFoundationSmoke {
         surface.setPresentation(
             .compact
         )
+
+        guard surface.editorPresentation.lineNumbers == .hidden,
+              !surface.editorPresentation.indentationGuides.isEnabled else {
+            throw TerminalTestFailure(
+                probe: "text surface compact editor presentation",
+                expectation: "plain compact editor presentation",
+                observed: String(
+                    describing: surface.editorPresentation
+                )
+            )
+        }
 
         guard surface.text == "abcdefghijklmnopqrst",
               surface.mode == .insert else {

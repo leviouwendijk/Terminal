@@ -352,7 +352,7 @@ public struct TerminalTextEditor:
         into frame: inout TerminalFrame,
         in region: TerminalRegion,
         isFocused: Bool = true,
-        selectionStyle: TerminalStyle = .init(.inverse),
+        presentation: TerminalTextEditorPresentation = .plain,
         yankStyle: TerminalStyle = .init(
             .black,
             .brightYellowBackground
@@ -364,12 +364,23 @@ public struct TerminalTextEditor:
             return
         }
 
+        let gutterColumns = presentation.gutterColumns(
+            lineCount: buffer.lineCount,
+            availableColumns: region.columns
+        )
+        let textColumns = max(
+            1,
+            region.columns - gutterColumns
+        )
         let layout = layout(
-            columns: region.columns
+            columns: textColumns
         )
         let cursor = layout.position(
             forCursorOffset: buffer.cursorOffset
         )
+        let currentLineNumber = layout.rows[
+            cursor.row
+        ].sourceLineNumber
 
         viewport.update(
             contentRows: layout.rows.count,
@@ -387,7 +398,8 @@ public struct TerminalTextEditor:
         )
 
         if let presentationState,
-           presentationState.region == region {
+           presentationState.region == region,
+           presentationState.contentColumns == textColumns {
             frame.scrollRows(
                 in: region,
                 by:
@@ -398,6 +410,7 @@ public struct TerminalTextEditor:
 
         presentationState = PresentationState(
             region: region,
+            contentColumns: textColumns,
             offset: viewport.offset
         )
 
@@ -409,6 +422,14 @@ public struct TerminalTextEditor:
             mode == .visual
             ? self.selectionRanges
             : []
+        let lineSelectionRange: Range<Int>?
+
+        if mode == .visual,
+           selection?.kind == .line {
+            lineSelectionRange = selectionRange
+        } else {
+            lineSelectionRange = nil
+        }
 
         if yankPresentation != nil,
            yankRanges.isEmpty {
@@ -422,19 +443,65 @@ public struct TerminalTextEditor:
                 + visualRow
                 - viewport.offset
 
-            frame.write(
-                renderedContent(
+            let rendered =
+                renderedLineSelectionContent(
                     layoutRow,
-                    selectionStyle: selectionStyle,
+                    columns: textColumns,
+                    options: presentation.indentationGuides,
+                    selectionRange: lineSelectionRange,
+                    selectionStyle: presentation.selectionStyle
+                )
+                ?? renderedIndentationGuides(
+                    in: renderedContent(
+                        layoutRow,
+                        selectionStyle: presentation.selectionStyle,
+                        selectionRanges: selectionRanges,
+                        yankRanges: yankRanges,
+                        yankStyle: yankStyle
+                    ),
+                    row: layoutRow,
+                    options: presentation.indentationGuides,
+                    selectionStyle: presentation.selectionStyle,
                     selectionRanges: selectionRanges,
                     yankRanges: yankRanges,
                     yankStyle: yankStyle
-                ),
+                )
+
+            if gutterColumns > 0 {
+                let lineNumber = presentation.lineNumberText(
+                    sourceLineNumber: layoutRow.sourceLineNumber,
+                    currentLineNumber: currentLineNumber,
+                    isSourceLineStart: layoutRow.isSourceLineStart,
+                    gutterColumns: gutterColumns
+                )
+                let lineNumberStyle =
+                    layoutRow.sourceLineNumber == currentLineNumber
+                    ? presentation.currentLineNumberStyle
+                    : presentation.lineNumberStyle
+
+                frame.write(
+                    lineNumberStyle.apply(
+                        TerminalDisplay.fitted(
+                            lineNumber,
+                            columns: gutterColumns
+                        )
+                    ),
+                    in: TerminalRegion(
+                        top: outputRow,
+                        leading: region.leading,
+                        rows: 1,
+                        columns: gutterColumns
+                    )
+                )
+            }
+
+            frame.write(
+                rendered,
                 in: TerminalRegion(
                     top: outputRow,
-                    leading: region.leading,
+                    leading: region.leading + gutterColumns,
                     rows: 1,
-                    columns: region.columns
+                    columns: textColumns
                 )
             )
         }
@@ -453,11 +520,12 @@ public struct TerminalTextEditor:
                 - viewport.offset,
             column:
                 region.leading
+                + gutterColumns
                 + min(
                     cursor.column,
                     max(
                         0,
-                        region.columns - 1
+                        textColumns - 1
                     )
                 ),
             shape: cursorShape
@@ -1632,6 +1700,169 @@ public struct TerminalTextEditor:
         )
     }
 
+    private func renderedLineSelectionContent(
+        _ row: TerminalTextLayoutRow,
+        columns: Int,
+        options: TerminalIndentationGuideOptions,
+        selectionRange: Range<Int>?,
+        selectionStyle: TerminalStyle
+    ) -> String? {
+        guard let selectionRange,
+              row.sourceRange.overlaps(
+                selectionRange
+              )
+                || (
+                    row.sourceRange.isEmpty
+                    && selectionRange.contains(
+                        row.sourceRange.lowerBound
+                    )
+                ) else {
+            return nil
+        }
+
+        var content = row.content
+
+        if options.isEnabled,
+           row.isSourceLineStart {
+            let leadingColumns = row.content.prefix {
+                $0 == " "
+            }.count
+            let glyph = TerminalDisplay.fitted(
+                options.glyph,
+                columns: 1
+            )
+
+            if leadingColumns > 0,
+               TerminalDisplay.width(
+                of: glyph
+               ) == 1 {
+                for column in stride(
+                    from: 0,
+                    to: leadingColumns,
+                    by: max(
+                        1,
+                        options.width
+                    )
+                ).reversed() {
+                    let before = column > 0
+                        ? TerminalDisplay.slice(
+                            content,
+                            columns: 0..<column
+                        )
+                        : ""
+                    let after = column + 1 < row.columns
+                        ? TerminalDisplay.slice(
+                            content,
+                            columns: (column + 1)..<row.columns
+                        )
+                        : ""
+
+                    content = before
+                        + glyph
+                        + after
+                }
+            }
+        }
+
+        return selectionStyle.apply(
+            TerminalDisplay.fitted(
+                content,
+                columns: columns
+            )
+        )
+    }
+
+    private func renderedIndentationGuides(
+        in renderedContent: String,
+        row: TerminalTextLayoutRow,
+        options: TerminalIndentationGuideOptions,
+        selectionStyle: TerminalStyle,
+        selectionRanges: [Range<Int>],
+        yankRanges: [Range<Int>],
+        yankStyle: TerminalStyle
+    ) -> String {
+        guard options.isEnabled,
+              row.isSourceLineStart else {
+            return renderedContent
+        }
+
+        let leadingColumns = row.content.prefix {
+            $0 == " "
+        }.count
+
+        guard leadingColumns > 0 else {
+            return renderedContent
+        }
+
+        let glyph = TerminalDisplay.fitted(
+            options.glyph,
+            columns: 1
+        )
+
+        guard TerminalDisplay.width(
+            of: glyph
+        ) == 1 else {
+            return renderedContent
+        }
+
+        var result = renderedContent
+        let guideColumns = stride(
+            from: 0,
+            to: leadingColumns,
+            by: options.width
+        ).reversed()
+
+        for column in guideColumns {
+            let sourceOffset = row.sourceOffset(
+                atColumn: column
+            )
+            let style: TerminalStyle
+
+            if yankRanges.contains(
+                where: {
+                    $0.contains(
+                        sourceOffset
+                    )
+                }
+            ) {
+                style = yankStyle
+            } else if mode == .visual,
+                      selectionRanges.contains(
+                        where: {
+                            $0.contains(
+                                sourceOffset
+                            )
+                        }
+                      )
+            {
+                style = selectionStyle
+            } else {
+                style = options.style
+            }
+
+            let before = column > 0
+                ? TerminalDisplay.slice(
+                    result,
+                    columns: 0..<column
+                )
+                : ""
+            let after = column + 1 < row.columns
+                ? TerminalDisplay.slice(
+                    result,
+                    columns: (column + 1)..<row.columns
+                )
+                : ""
+
+            result = before
+                + style.apply(
+                    glyph
+                )
+                + after
+        }
+
+        return result
+    }
+
     private func renderedContent(
         _ row: TerminalTextLayoutRow,
         sourceRange: Range<Int>,
@@ -1681,6 +1912,7 @@ public struct TerminalTextEditor:
         Sendable
     {
         var region: TerminalRegion
+        var contentColumns: Int
         var offset: Int
     }
 

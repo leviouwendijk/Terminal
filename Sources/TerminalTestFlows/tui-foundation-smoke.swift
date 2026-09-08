@@ -36,6 +36,7 @@ enum TerminalTUIFoundationSmoke {
         try TerminalSessionOptionsFoundationSmoke.run()
         try TerminalTextBufferFoundationSmoke.run()
         try TerminalTextEditorFoundationSmoke.run()
+        try TerminalTextEditorPresentationFoundationSmoke.run()
         try TerminalTextSurfaceFoundationSmoke.run()
         try TerminalCommandLineFoundationSmoke.run()
         try TerminalInputBufferStoreFoundationSmoke.run()

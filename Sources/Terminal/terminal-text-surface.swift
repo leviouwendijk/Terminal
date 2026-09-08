@@ -51,6 +51,8 @@ public struct TerminalTextSurface:
     public private(set) var editor: TerminalTextEditor
     public var sizePolicy: TerminalTextSurfaceSizePolicy
     public private(set) var presentation: TerminalTextSurfacePresentation
+    public var compactEditorPresentation: TerminalTextEditorPresentation
+    public var expandedEditorPresentation: TerminalTextEditorPresentation
     public var placeholder: String
     public var placeholderStyle: TerminalStyle
 
@@ -58,12 +60,16 @@ public struct TerminalTextSurface:
         editor: TerminalTextEditor = TerminalTextEditor(),
         sizePolicy: TerminalTextSurfaceSizePolicy = .init(),
         presentation: TerminalTextSurfacePresentation = .compact,
+        compactEditorPresentation: TerminalTextEditorPresentation = .plain,
+        expandedEditorPresentation: TerminalTextEditorPresentation = .plain,
         placeholder: String = "",
         placeholderStyle: TerminalStyle = .dim
     ) {
         self.editor = editor
         self.sizePolicy = sizePolicy
         self.presentation = presentation
+        self.compactEditorPresentation = compactEditorPresentation
+        self.expandedEditorPresentation = expandedEditorPresentation
         self.placeholder = placeholder
         self.placeholderStyle = placeholderStyle
     }
@@ -78,6 +84,12 @@ public struct TerminalTextSurface:
 
     public var viewport: TerminalViewport {
         editor.viewport
+    }
+
+    public var editorPresentation: TerminalTextEditorPresentation {
+        editorPresentation(
+            for: presentation
+        )
     }
 
     public mutating func handle(
@@ -135,13 +147,10 @@ public struct TerminalTextSurface:
     public func contentRowCount(
         columns: Int
     ) -> Int {
-        TerminalTextLayout(
-            text: editor.buffer.text,
-            columns: max(
-                1,
-                columns
-            )
-        ).rows.count
+        contentRowCount(
+            columns: columns,
+            presentation: presentation
+        )
     }
 
     public func compactRows(
@@ -149,7 +158,8 @@ public struct TerminalTextSurface:
     ) -> Int {
         sizePolicy.rows(
             forContentRows: contentRowCount(
-                columns: columns
+                columns: columns,
+                presentation: .compact
             )
         )
     }
@@ -190,10 +200,13 @@ public struct TerminalTextSurface:
             return
         }
 
+        let editorPresentation = self.editorPresentation
+
         editor.render(
             into: &frame,
             in: region,
-            isFocused: isFocused
+            isFocused: isFocused,
+            presentation: editorPresentation
         )
 
         guard editor.buffer.text.isEmpty,
@@ -201,19 +214,69 @@ public struct TerminalTextSurface:
             return
         }
 
+        let gutterColumns = editorPresentation.gutterColumns(
+            lineCount: editor.buffer.lineCount,
+            availableColumns: region.columns
+        )
+        let placeholderColumns = max(
+            0,
+            region.columns - gutterColumns
+        )
+
+        guard placeholderColumns > 0 else {
+            return
+        }
+
         frame.write(
             placeholderStyle.apply(
                 TerminalDisplay.clipped(
                     placeholder,
-                    columns: region.columns
+                    columns: placeholderColumns
                 )
             ),
             in: TerminalRegion(
                 top: region.top,
-                leading: region.leading,
+                leading: region.leading + gutterColumns,
                 rows: 1,
-                columns: region.columns
+                columns: placeholderColumns
             )
         )
+    }
+
+    private func editorPresentation(
+        for presentation: TerminalTextSurfacePresentation
+    ) -> TerminalTextEditorPresentation {
+        switch presentation {
+        case .compact:
+            return compactEditorPresentation
+
+        case .expanded:
+            return expandedEditorPresentation
+        }
+    }
+
+    private func contentRowCount(
+        columns: Int,
+        presentation: TerminalTextSurfacePresentation
+    ) -> Int {
+        let columns = max(
+            1,
+            columns
+        )
+        let editorPresentation = editorPresentation(
+            for: presentation
+        )
+        let gutterColumns = editorPresentation.gutterColumns(
+            lineCount: editor.buffer.lineCount,
+            availableColumns: columns
+        )
+
+        return TerminalTextLayout(
+            text: editor.buffer.text,
+            columns: max(
+                1,
+                columns - gutterColumns
+            )
+        ).rows.count
     }
 }
