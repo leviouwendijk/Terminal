@@ -18,10 +18,12 @@ enum TerminalInputBufferStoreFoundationSmoke {
         let store = TerminalInputBufferStore(
             directory: directory
         )
-        let id = TerminalInputBufferID()
+        let session = TerminalTextBufferSession(
+            text: "hello\nworld"
+        )
         let destination = try store.write(
-            "hello\nworld",
-            id: id
+            session.text,
+            id: session.id
         )
         let loaded = try String(
             contentsOf: destination,
@@ -30,7 +32,7 @@ enum TerminalInputBufferStoreFoundationSmoke {
 
         guard loaded == "hello\nworld",
               destination.lastPathComponent
-                == id.description + ".txt" else {
+                == session.id.description + ".txt" else {
             throw TerminalTestFailure(
                 probe: "TerminalInputBufferStore persistence",
                 expectation: "stable id path with exact saved text",

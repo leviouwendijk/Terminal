@@ -78,14 +78,22 @@ private struct TerminalOverlaySmokePaste:
     Sendable,
     Hashable
 {
-    var text: String
+    var buffer: TerminalTextBufferSession
 
     init(
         _ text: String
     ) {
-        self.text = TerminalTextBuffer(
+        self.buffer = TerminalTextBufferSession(
             text: text
-        ).text
+        )
+    }
+
+    var id: TerminalInputBufferID {
+        buffer.id
+    }
+
+    var text: String {
+        buffer.text
     }
 
     var lineCount: Int {
@@ -400,7 +408,6 @@ enum TerminalOverlaySmoke {
         )
         var pendingContents: [TerminalOverlaySmokeContent] = []
         var editingPendingContentIndex: Int?
-        var editor = TerminalTextEditor()
         var approval = TerminalListControl(
             items: approvalItems,
             currentID: TerminalOverlaySmokeApprovalChoice.approve,
@@ -459,12 +466,12 @@ enum TerminalOverlaySmoke {
                     timelineDocument: &timelineDocument,
                     composer: &composer,
                     commandLine: commandLine,
-                    pendingContents: pendingContents,
+                    pendingContents: &pendingContents,
+                    editingPendingContentIndex: editingPendingContentIndex,
                     selectedMessageID: selectedMessageID,
                     inspectedMessageID: inspectedMessageID,
                     inspectedContentIndex: inspectedContentIndex,
                     messageDocument: &messageDocument,
-                    editor: &editor,
                     approval: approval,
                     quitConfirmation: quitConfirmation,
                     transcriptDocument: &transcriptDocument,
@@ -530,9 +537,16 @@ enum TerminalOverlaySmoke {
                         )
 
                     case .editor:
-                        _ = editor.handle(
-                            event
-                        )
+                        if let index = editingPendingContentIndex,
+                           pendingContents.indices.contains(index),
+                           case .pastedText(var paste) = pendingContents[index] {
+                            _ = paste.buffer.editor.handle(
+                                event
+                            )
+                            pendingContents[index] = .pastedText(
+                                paste
+                            )
+                        }
 
                     case .transcript,
                          .navigation,
@@ -595,10 +609,24 @@ enum TerminalOverlaySmoke {
                 case .command(let command):
                     switch command {
                     case .write:
+                        let text: String
+                        let id: TerminalInputBufferID
+
+                        if focus.current == .editor,
+                           let index = editingPendingContentIndex,
+                           pendingContents.indices.contains(index),
+                           let paste = pendingContents[index].pastedTextValue {
+                            text = paste.text
+                            id = paste.id
+                        } else {
+                            text = composer.text
+                            id = inputBufferID
+                        }
+
                         do {
                             let destination = try inputBufferStore.write(
-                                composer.text,
-                                id: inputBufferID
+                                text,
+                                id: id
                             )
 
                             commandLine.setStatus(
@@ -611,7 +639,10 @@ enum TerminalOverlaySmoke {
                         }
 
                     case .quit:
-                        if focus.current == .composerSheet {
+                        if focus.current == .editor {
+                            editingPendingContentIndex = nil
+                            _ = focus.pop()
+                        } else if focus.current == .composerSheet {
                             composer.setPresentation(
                                 .compact
                             )
@@ -686,15 +717,12 @@ enum TerminalOverlaySmoke {
                     }
 
                 case .control("E"):
-                    if let index = pendingContents.indices.last,
-                       let pastedText = pendingContents[index].pastedTextValue {
+                    if let index = pendingContents.indices.last(
+                        where: {
+                            pendingContents[$0].pastedTextValue != nil
+                        }
+                    ) {
                         editingPendingContentIndex = index
-                        editor.replace(
-                            with: pastedText.text
-                        )
-                        editor.setMode(
-                            .normal
-                        )
                         focus.push(
                             .editor
                         )
@@ -1074,32 +1102,58 @@ enum TerminalOverlaySmoke {
                 }
 
             case .editor:
-                if key == .control("C") {
-                    return
+                switch key {
+                case .control("P"):
+                    editingPendingContentIndex = movedPastedContentIndex(
+                        from: editingPendingContentIndex,
+                        by: -1,
+                        in: pendingContents
+                    )
+                    continue
+
+                case .control("N"):
+                    editingPendingContentIndex = movedPastedContentIndex(
+                        from: editingPendingContentIndex,
+                        by: 1,
+                        in: pendingContents
+                    )
+                    continue
+
+                default:
+                    break
                 }
 
-                if case .cancelRequested? = editor.handle(
-                    key
-                ) {
-                    let text = editor.buffer.text
+                guard let index = editingPendingContentIndex,
+                      pendingContents.indices.contains(index),
+                      case .pastedText(var paste) = pendingContents[index] else {
+                    editingPendingContentIndex = nil
+                    _ = focus.pop()
+                    continue
+                }
 
-                    if let index = editingPendingContentIndex,
-                       pendingContents.indices.contains(index) {
-                        if text.isEmpty {
-                            pendingContents.remove(
-                                at: index
-                            )
-                        } else {
-                            pendingContents[index] = .pastedText(
-                                TerminalOverlaySmokePaste(
-                                    text
-                                )
-                            )
-                        }
+                let editorEvent = paste.buffer.editor.handle(
+                    key
+                )
+                pendingContents[index] = .pastedText(
+                    paste
+                )
+
+                switch editorEvent {
+                case .commandLineRequested?:
+                    commandLine.begin()
+
+                case .cancelRequested?:
+                    if paste.text.isEmpty {
+                        pendingContents.remove(
+                            at: index
+                        )
                     }
 
                     editingPendingContentIndex = nil
                     _ = focus.pop()
+
+                default:
+                    break
                 }
 
             case .quitConfirmation:
@@ -1239,12 +1293,12 @@ enum TerminalOverlaySmoke {
         timelineDocument: inout TerminalScrollableDocument,
         composer: inout TerminalTextSurface,
         commandLine: TerminalCommandLine,
-        pendingContents: [TerminalOverlaySmokeContent],
+        pendingContents: inout [TerminalOverlaySmokeContent],
+        editingPendingContentIndex: Int?,
         selectedMessageID: Int?,
         inspectedMessageID: Int?,
         inspectedContentIndex: Int,
         messageDocument: inout TerminalScrollableDocument,
-        editor: inout TerminalTextEditor,
         approval: TerminalListControl<
             ApprovalItem,
             TerminalOverlaySmokeApprovalChoice
@@ -1333,11 +1387,21 @@ enum TerminalOverlaySmoke {
             }
 
         case .editor:
-            renderEditor(
-                into: &frame,
-                in: root,
-                editor: &editor
-            )
+            if let index = editingPendingContentIndex,
+               pendingContents.indices.contains(index),
+               case .pastedText(var paste) = pendingContents[index] {
+                renderEditor(
+                    into: &frame,
+                    in: root,
+                    editor: &paste.buffer.editor,
+                    bufferIndex: index + 1,
+                    bufferCount: pendingContents.count,
+                    commandLine: commandLine
+                )
+                pendingContents[index] = .pastedText(
+                    paste
+                )
+            }
 
         case .quitConfirmation:
             renderQuitConfirmation(
@@ -2314,10 +2378,40 @@ enum TerminalOverlaySmoke {
         }
     }
 
+    private static func movedPastedContentIndex(
+        from current: Int?,
+        by offset: Int,
+        in contents: [TerminalOverlaySmokeContent]
+    ) -> Int? {
+        let indices = contents.indices.filter {
+            contents[$0].pastedTextValue != nil
+        }
+
+        guard !indices.isEmpty else {
+            return nil
+        }
+
+        let currentPosition = current.flatMap {
+            indices.firstIndex(
+                of: $0
+            )
+        } ?? 0
+        let nextPosition = (
+            currentPosition
+                + offset
+                + indices.count
+        ) % indices.count
+
+        return indices[nextPosition]
+    }
+
     private static func renderEditor(
         into frame: inout TerminalFrame,
         in root: TerminalRegion,
-        editor: inout TerminalTextEditor
+        editor: inout TerminalTextEditor,
+        bufferIndex: Int,
+        bufferCount: Int,
+        commandLine: TerminalCommandLine
     ) {
         let overlay = TerminalOverlay(
             placement: .centered(
@@ -2332,7 +2426,7 @@ enum TerminalOverlaySmoke {
         let content = overlay.render(
             into: &frame,
             in: root,
-            title: "pasted text editor"
+            title: "pasted text · \(bufferIndex)/\(bufferCount)"
         )
 
         guard !content.isEmpty else {
@@ -2353,22 +2447,40 @@ enum TerminalOverlaySmoke {
                     rows: editorRows,
                     columns: content.columns
                 ),
-                isFocused: true
+                isFocused: true,
+                presentation: TerminalTextEditorPresentation(
+                    lineNumbers: .hybrid,
+                    indentationGuides: TerminalIndentationGuideOptions(
+                        isEnabled: true,
+                        width: 4,
+                        glyph: "│"
+                    )
+                )
             )
         }
 
         if content.rows > 0 {
-            frame.write(
-                TerminalStyle.dim.apply(
-                    "mode \(editor.mode)  i insert  v visual  ctrl-c normal/close  h/j/k/l move  esc normal/close"
-                ),
-                in: TerminalRegion(
-                    top: content.bottom - 1,
-                    leading: content.leading,
-                    rows: 1,
-                    columns: content.columns
-                )
+            let commandRegion = TerminalRegion(
+                top: content.bottom - 1,
+                leading: content.leading,
+                rows: 1,
+                columns: content.columns
             )
+
+            if commandLine.hasPresentation {
+                commandLine.render(
+                    into: &frame,
+                    in: commandRegion,
+                    isFocused: true
+                )
+            } else {
+                frame.write(
+                    TerminalStyle.dim.apply(
+                        "mode \(editor.mode) · u undo · ctrl-r redo · ctrl-p/n buffers · :w save · :q close · h/j/k/l move"
+                    ),
+                    in: commandRegion
+                )
+            }
         }
     }
 

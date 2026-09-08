@@ -26,6 +26,7 @@ public struct TerminalTextEditor:
     public var clipboard: TerminalClipboardDestination
     public var shiftWidth: Int
     public private(set) var yankPresentation: TerminalYankPresentation?
+    public private(set) var history: TerminalTextEditHistory
 
     private var layoutCache: LayoutCache?
     private var presentationState: PresentationState?
@@ -37,7 +38,8 @@ public struct TerminalTextEditor:
         visibleRows: Int = 0,
         shiftWidth: Int = 4,
         clipboard: TerminalClipboardDestination = .system,
-        registers: TerminalRegisterBank = .init()
+        registers: TerminalRegisterBank = .init(),
+        history: TerminalTextEditHistory = .init()
     ) {
         self.buffer = TerminalTextBuffer(
             text: text,
@@ -69,6 +71,7 @@ public struct TerminalTextEditor:
             shiftWidth
         )
         self.yankPresentation = nil
+        self.history = history
         self.layoutCache = nil
         self.presentationState = nil
     }
@@ -86,6 +89,7 @@ public struct TerminalTextEditor:
             && lhs.registers == rhs.registers
             && lhs.clipboard == rhs.clipboard
             && lhs.shiftWidth == rhs.shiftWidth
+            && lhs.history == rhs.history
     }
 
     public func hash(
@@ -117,6 +121,9 @@ public struct TerminalTextEditor:
         )
         hasher.combine(
             shiftWidth
+        )
+        hasher.combine(
+            history
         )
     }
 
@@ -178,12 +185,26 @@ public struct TerminalTextEditor:
         blockInsertSession = nil
         replaceSession = nil
         yankPresentation = nil
+        history.reset()
         presentationState = nil
     }
 
     public mutating func setMode(
         _ mode: Swim.Mode
     ) {
+        let previousMode = interaction.mode
+
+        if !isEditingMode(
+            previousMode
+        ),
+        isEditingMode(
+            mode
+        ) {
+            history.begin(
+                with: buffer
+            )
+        }
+
         interaction.setMode(
             mode
         )
@@ -204,6 +225,17 @@ public struct TerminalTextEditor:
                     ?? .character
             )
         }
+
+        if isEditingMode(
+            previousMode
+        ),
+        !isEditingMode(
+            mode
+        ) {
+            _ = history.commit(
+                current: buffer
+            )
+        }
     }
 
     public mutating func handle(
@@ -221,15 +253,26 @@ public struct TerminalTextEditor:
             )
 
         case .paste(let text):
-            return insertPastedText(
+            let before = buffer
+            let modeBefore = mode
+            let event = insertPastedText(
                 text
             )
+
+            reconcileHistory(
+                before: before,
+                modeBefore: modeBefore
+            )
+            return event
         }
     }
 
     public mutating func handle(
         _ key: TerminalKey
     ) -> TerminalTextEditorEvent? {
+        let before = buffer
+        let modeBefore = mode
+
         switch interaction.handle(
             key.swimInput
         ) {
@@ -242,14 +285,46 @@ public struct TerminalTextEditor:
                 : nil
 
         case .action(let action):
-            return handle(
+            let event = apply(
                 action
             )
+
+            if !isHistoryNavigation(
+                action
+            ) {
+                reconcileHistory(
+                    before: before,
+                    modeBefore: modeBefore
+                )
+            }
+
+            return event
         }
     }
 
     @discardableResult
     public mutating func handle(
+        _ action: Swim.InteractionAction
+    ) -> TerminalTextEditorEvent? {
+        let before = buffer
+        let modeBefore = mode
+        let event = apply(
+            action
+        )
+
+        if !isHistoryNavigation(
+            action
+        ) {
+            reconcileHistory(
+                before: before,
+                modeBefore: modeBefore
+            )
+        }
+
+        return event
+    }
+
+    private mutating func apply(
         _ action: Swim.InteractionAction
     ) -> TerminalTextEditorEvent? {
         yankPresentation = nil
@@ -345,7 +420,129 @@ public struct TerminalTextEditor:
 
         case .change:
             return changeSelection()
+
+        case .undo:
+            return undoHistory()
+
+        case .redo:
+            return redoHistory()
         }
+    }
+
+    private func isHistoryNavigation(
+        _ action: Swim.InteractionAction
+    ) -> Bool {
+        switch action {
+        case .undo,
+             .redo:
+            return true
+
+        default:
+            return false
+        }
+    }
+
+    private func isEditingMode(
+        _ mode: Swim.Mode
+    ) -> Bool {
+        mode == .insert
+            || mode == .replace
+    }
+
+    private mutating func reconcileHistory(
+        before: TerminalTextBuffer,
+        modeBefore: Swim.Mode
+    ) {
+        let modeAfter = mode
+        let enteredEditing =
+            !isEditingMode(
+                modeBefore
+            )
+            && isEditingMode(
+                modeAfter
+            )
+        let leftEditing =
+            isEditingMode(
+                modeBefore
+            )
+            && !isEditingMode(
+                modeAfter
+            )
+        let textChanged =
+            before.text != buffer.text
+
+        if enteredEditing {
+            history.begin(
+                with: before
+            )
+        }
+
+        if textChanged,
+           !history.hasPendingTransaction {
+            if isEditingMode(
+                modeAfter
+            ) {
+                history.begin(
+                    with: before
+                )
+            } else {
+                history.record(
+                    before: before,
+                    after: buffer
+                )
+            }
+        }
+
+        if leftEditing {
+            _ = history.commit(
+                current: buffer
+            )
+        }
+    }
+
+    private mutating func undoHistory()
+        -> TerminalTextEditorEvent?
+    {
+        guard let restored = history.undo(
+            current: buffer
+        ) else {
+            return nil
+        }
+
+        restoreHistoryBuffer(
+            restored
+        )
+        return .changed
+    }
+
+    private mutating func redoHistory()
+        -> TerminalTextEditorEvent?
+    {
+        guard let restored = history.redo(
+            current: buffer
+        ) else {
+            return nil
+        }
+
+        restoreHistoryBuffer(
+            restored
+        )
+        return .changed
+    }
+
+    private mutating func restoreHistoryBuffer(
+        _ restored: TerminalTextBuffer
+    ) {
+        buffer = restored
+        interaction.setMode(
+            .normal
+        )
+        selection = nil
+        blockInsertSession = nil
+        replaceSession = nil
+        yankPresentation = nil
+        layoutCache = nil
+        presentationState = nil
     }
 
     public mutating func render(
