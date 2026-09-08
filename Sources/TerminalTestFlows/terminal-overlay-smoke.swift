@@ -14,7 +14,33 @@ private enum TerminalOverlaySmokeFocus:
     case messageInspector
     case approval
     case inspector
+    case composerSheet
     case editor
+    case quitConfirmation
+}
+
+private enum TerminalOverlaySmokeKeyAction:
+    Sendable
+{
+    case submit
+}
+
+private enum TerminalOverlaySmokeQuitChoice:
+    Sendable,
+    Hashable
+{
+    case cancel
+    case quit
+
+    var title: String {
+        switch self {
+        case .cancel:
+            return "Cancel"
+
+        case .quit:
+            return "Quit"
+        }
+    }
 }
 
 private enum TerminalOverlaySmokeDestination:
@@ -296,6 +322,8 @@ enum TerminalOverlaySmoke {
                 hideCursor: true,
                 useRawMode: true,
                 useBracketedPaste: true,
+                keyboardProtocol: .kitty,
+                controlSignalBehavior: .input,
                 restoreOnInterrupt: true,
                 outputStream: stream
             )
@@ -309,6 +337,18 @@ enum TerminalOverlaySmoke {
         var renderer = TerminalFrameRenderer(
             stream: stream
         )
+        var keyMap = TerminalKeyMap<TerminalOverlaySmokeKeyAction>()
+        keyMap.remap(
+            .control("C"),
+            to: .escape
+        )
+        keyMap.bindAction(
+            TerminalKeyStroke(
+                key: .enter,
+                modifiers: .control
+            ),
+            to: .submit
+        )
         var focus = TerminalFocusStack(
             TerminalOverlaySmokeFocus.base
         )
@@ -319,10 +359,19 @@ enum TerminalOverlaySmoke {
                 $0
             }
         )
-        var composer = TerminalTextInputControl(
-            prompt: "> ",
+        var composer = TerminalTextSurface(
+            editor: TerminalTextEditor(
+                mode: .insert
+            ),
+            sizePolicy: TerminalTextSurfaceSizePolicy(
+                minimumRows: 1,
+                maximumRows: 6
+            ),
             placeholder: "type a message..."
         )
+        var commandLine = TerminalCommandLine()
+        let inputBufferStore = TerminalInputBufferStore()
+        let inputBufferID = TerminalInputBufferID()
         var timeline = TerminalListControl(
             items: TerminalOverlaySmokeTimelineStep.allCases,
             currentID: TerminalOverlaySmokeTimelineStep.swiftBuild,
@@ -339,6 +388,13 @@ enum TerminalOverlaySmoke {
         var approval = TerminalListControl(
             items: approvalItems,
             currentID: TerminalOverlaySmokeApprovalChoice.approve,
+            id: {
+                $0.id
+            }
+        )
+        var quitConfirmation = TerminalListControl(
+            items: quitItems,
+            currentID: TerminalOverlaySmokeQuitChoice.cancel,
             id: {
                 $0.id
             }
@@ -385,7 +441,8 @@ enum TerminalOverlaySmoke {
                     navigation: navigation,
                     timeline: timeline,
                     timelineDocument: &timelineDocument,
-                    composer: composer,
+                    composer: &composer,
+                    commandLine: commandLine,
                     pendingContents: pendingContents,
                     selectedMessageID: selectedMessageID,
                     inspectedMessageID: inspectedMessageID,
@@ -393,6 +450,7 @@ enum TerminalOverlaySmoke {
                     messageDocument: &messageDocument,
                     editor: &editor,
                     approval: approval,
+                    quitConfirmation: quitConfirmation,
                     transcriptDocument: &transcriptDocument,
                     inspector: inspector,
                     inspectorDocument: &inspectorDocument,
@@ -450,6 +508,11 @@ enum TerminalOverlaySmoke {
                             )
                         }
 
+                    case .composerSheet:
+                        _ = composer.handle(
+                            event
+                        )
+
                     case .editor:
                         _ = editor.handle(
                             event
@@ -460,14 +523,105 @@ enum TerminalOverlaySmoke {
                          .timeline,
                          .messageInspector,
                          .approval,
-                         .inspector:
+                         .inspector,
+                         .quitConfirmation:
                         break
                     }
 
                     continue
                 }
 
-            guard case .key(let key) = event else {
+            guard let keyStroke = event.keyStroke else {
+                continue
+            }
+
+            let key: TerminalKey
+
+            switch keyMap.resolveOrFallback(
+                keyStroke
+            ) {
+            case .key(let resolvedKey):
+                key = resolvedKey
+
+            case .action(.submit):
+                guard focus.current == .base
+                    || focus.current == .composerSheet
+                else {
+                    continue
+                }
+
+                if let submittedMessageID = submit(
+                    composer: &composer,
+                    pendingContents: &pendingContents,
+                    messages: &messages,
+                    nextMessageID: &nextMessageID
+                ) {
+                    selectedMessageID = submittedMessageID
+                    transcriptDocument.moveToEnd()
+                }
+
+                continue
+
+            case .consumed:
+                continue
+            }
+
+            if commandLine.isActive {
+                switch commandLine.handle(
+                    key
+                ) {
+                case .editing:
+                    break
+
+                case .cancelled:
+                    break
+
+                case .command(let command):
+                    switch command {
+                    case .write:
+                        do {
+                            let destination = try inputBufferStore.write(
+                                composer.text,
+                                id: inputBufferID
+                            )
+
+                            commandLine.setStatus(
+                                "\"\(destination.path)\" written"
+                            )
+                        } catch {
+                            commandLine.setStatus(
+                                "E212: Can't open file for writing: \(error)"
+                            )
+                        }
+
+                    case .quit:
+                        if focus.current == .composerSheet {
+                            composer.setPresentation(
+                                .compact
+                            )
+                            _ = focus.pop()
+                        } else {
+                            _ = quitConfirmation.select(
+                                id: .cancel
+                            )
+
+                            if focus.current != .quitConfirmation {
+                                focus.push(
+                                    .quitConfirmation
+                                )
+                            }
+                        }
+                    }
+
+                case .invalid(let command):
+                    commandLine.setStatus(
+                        "E492: Not an editor command: \(command)"
+                    )
+
+                case .inactive:
+                    break
+                }
+
                 continue
             }
 
@@ -478,6 +632,14 @@ enum TerminalOverlaySmoke {
                      .control("D"):
                     return
 
+                case .control("F"):
+                    composer.setPresentation(
+                        .expanded
+                    )
+                    focus.push(
+                        .composerSheet
+                    )
+
                 case .control("O"):
                     _ = approval.select(
                         id: .approve
@@ -487,7 +649,13 @@ enum TerminalOverlaySmoke {
                     )
 
                 case .tab:
-                    if navigation.currentID == .current {
+                    if composer.mode == .insert
+                        || composer.mode == .replace
+                    {
+                        _ = composer.handle(
+                            key
+                        )
+                    } else if navigation.currentID == .current {
                         if selectedMessageID == nil {
                             selectedMessageID = messages.last?.id
                         }
@@ -530,36 +698,48 @@ enum TerminalOverlaySmoke {
                     }
 
                 case .pageUp,
-                     .control("U"):
+                     .pageDown:
+                    _ = composer.handle(
+                        key
+                    )
+
+                case .control("U"):
                     _ = transcriptDocument.handle(
                         .motion(
                             .pageUp
                         )
                     )
 
-                case .pageDown,
-                     .control("D"):
-                    _ = transcriptDocument.handle(
-                        .motion(
-                            .pageDown
-                        )
-                    )
-
                 case .enter:
-                    if let submittedMessageID = submit(
-                        composer: &composer,
-                        pendingContents: &pendingContents,
-                        messages: &messages,
-                        nextMessageID: &nextMessageID
-                    ) {
-                        selectedMessageID = submittedMessageID
-                        transcriptDocument.moveToEnd()
-                    }
-
-                default:
                     _ = composer.handle(
                         key
                     )
+
+                default:
+                    if case .commandLineRequested? = composer.handle(
+                        key
+                    ) {
+                        commandLine.begin()
+                    }
+                }
+
+            case .composerSheet:
+                switch key {
+                case .control("C"):
+                    return
+
+                case .control("F"):
+                    composer.setPresentation(
+                        .compact
+                    )
+                    _ = focus.pop()
+
+                default:
+                    if case .commandLineRequested? = composer.handle(
+                        key
+                    ) {
+                        commandLine.begin()
+                    }
                 }
 
             case .transcript:
@@ -905,6 +1085,28 @@ enum TerminalOverlaySmoke {
                     editingPendingContentIndex = nil
                     _ = focus.pop()
                 }
+
+            case .quitConfirmation:
+                switch key {
+                case .escape:
+                    _ = focus.pop()
+
+                default:
+                    guard case .accepted(let choice)? =
+                        quitConfirmation.handle(
+                            key
+                        ) else {
+                        continue
+                    }
+
+                    switch choice {
+                    case .cancel:
+                        _ = focus.pop()
+
+                    case .quit:
+                        return
+                    }
+                }
             }
             }
 
@@ -921,6 +1123,24 @@ enum TerminalOverlaySmoke {
         var id: TerminalOverlaySmokeApprovalChoice
         var title: String
     }
+
+    private struct QuitItem:
+        Sendable
+    {
+        var id: TerminalOverlaySmokeQuitChoice
+        var title: String
+    }
+
+    private static let quitItems = [
+        QuitItem(
+            id: .cancel,
+            title: TerminalOverlaySmokeQuitChoice.cancel.title
+        ),
+        QuitItem(
+            id: .quit,
+            title: TerminalOverlaySmokeQuitChoice.quit.title
+        ),
+    ]
 
     private static let approvalItems = [
         ApprovalItem(
@@ -942,12 +1162,12 @@ enum TerminalOverlaySmoke {
     ]
 
     private static func submit(
-        composer: inout TerminalTextInputControl,
+        composer: inout TerminalTextSurface,
         pendingContents: inout [TerminalOverlaySmokeContent],
         messages: inout [TerminalOverlaySmokeMessage],
         nextMessageID: inout Int
     ) -> Int? {
-        let inlineText = composer.input.text
+        let inlineText = composer.text
             .trimmingCharacters(
                 in: .whitespacesAndNewlines
             )
@@ -979,6 +1199,9 @@ enum TerminalOverlaySmoke {
         nextMessageID += 1
 
         composer.clear()
+        composer.setMode(
+            .insert
+        )
         pendingContents.removeAll(
             keepingCapacity: true
         )
@@ -998,7 +1221,8 @@ enum TerminalOverlaySmoke {
             TerminalOverlaySmokeTimelineStep
         >,
         timelineDocument: inout TerminalScrollableDocument,
-        composer: TerminalTextInputControl,
+        composer: inout TerminalTextSurface,
+        commandLine: TerminalCommandLine,
         pendingContents: [TerminalOverlaySmokeContent],
         selectedMessageID: Int?,
         inspectedMessageID: Int?,
@@ -1008,6 +1232,10 @@ enum TerminalOverlaySmoke {
         approval: TerminalListControl<
             ApprovalItem,
             TerminalOverlaySmokeApprovalChoice
+        >,
+        quitConfirmation: TerminalListControl<
+            QuitItem,
+            TerminalOverlaySmokeQuitChoice
         >,
         transcriptDocument: inout TerminalScrollableDocument,
         inspector: TerminalOverlaySmokeInspector?,
@@ -1019,7 +1247,8 @@ enum TerminalOverlaySmoke {
             navigation: navigation,
             timeline: timeline,
             timelineDocument: &timelineDocument,
-            composer: composer,
+            composer: &composer,
+            commandLine: commandLine,
             composerFocused:
                 focus.current == .base,
             transcriptFocused:
@@ -1045,6 +1274,14 @@ enum TerminalOverlaySmoke {
              .navigation,
              .timeline:
             break
+
+        case .composerSheet:
+            renderComposerSheet(
+                into: &frame,
+                in: root,
+                composer: &composer,
+                commandLine: commandLine
+            )
 
         case .messageInspector:
             if let inspectedMessageID,
@@ -1085,6 +1322,13 @@ enum TerminalOverlaySmoke {
                 in: root,
                 editor: &editor
             )
+
+        case .quitConfirmation:
+            renderQuitConfirmation(
+                into: &frame,
+                in: root,
+                confirmation: quitConfirmation
+            )
         }
 
         return frame
@@ -1101,7 +1345,8 @@ enum TerminalOverlaySmoke {
             TerminalOverlaySmokeTimelineStep
         >,
         timelineDocument: inout TerminalScrollableDocument,
-        composer: TerminalTextInputControl,
+        composer: inout TerminalTextSurface,
+        commandLine: TerminalCommandLine,
         composerFocused: Bool,
         transcriptFocused: Bool,
         navigationFocused: Bool,
@@ -1124,12 +1369,23 @@ enum TerminalOverlaySmoke {
                 horizontal: 2
             )
         )
+        let composerColumns = max(
+            1,
+            root.columns - 2
+        )
+        let composerRows = composer.compactRows(
+            columns: composerColumns
+        )
+        let footerRows = min(
+            root.rows,
+            composerRows + 3
+        )
         let vertical = TerminalLayout.vertical(
             in: root,
             [
                 .fixed(2),
                 .flex(1),
-                .fixed(4),
+                .fixed(footerRows),
             ],
             spacing: 1
         )
@@ -1238,20 +1494,44 @@ enum TerminalOverlaySmoke {
             )
         }
 
-        if footer.rows > 1 {
-            composer.render(
-                into: &frame,
+        if footer.rows > 1,
+           composerRows > 0
+        {
+            frame.write(
+                "> ",
                 in: TerminalRegion(
                     top: footer.top + 1,
                     leading: footer.leading,
                     rows: 1,
-                    columns: footer.columns
+                    columns: min(
+                        2,
+                        footer.columns
+                    )
+                )
+            )
+
+            composer.render(
+                into: &frame,
+                in: TerminalRegion(
+                    top: footer.top + 1,
+                    leading: footer.leading + min(
+                        2,
+                        footer.columns
+                    ),
+                    rows: min(
+                        composerRows,
+                        max(
+                            0,
+                            footer.rows - 3
+                        )
+                    ),
+                    columns: composerColumns
                 ),
                 isFocused: composerFocused
             )
         }
 
-        if footer.rows > 2,
+        if footer.rows > composerRows + 1,
            let latestContent = pendingContents.last {
             let label = pendingContents.count == 1
                 ? latestContent.summary
@@ -1268,7 +1548,7 @@ enum TerminalOverlaySmoke {
                     summary
                 ),
                 in: TerminalRegion(
-                    top: footer.top + 2,
+                    top: footer.top + 1 + composerRows,
                     leading: footer.leading,
                     rows: 1,
                     columns: footer.columns
@@ -1276,32 +1556,42 @@ enum TerminalOverlaySmoke {
             )
         }
 
-        if footer.rows > 3 {
-            let hint: String
-
-            if navigationFocused {
-                hint = "j/k navigate  enter open  tab/esc composer  ctrl-c exit"
-            } else if timelineFocused {
-                hint = "j/k select step  enter inspect  esc navigation  ctrl-c exit"
-            } else if transcriptFocused {
-                hint = "j/k select message  enter inspect  tab navigation  esc composer"
-            } else if destination == .current {
-                hint = "enter submit  tab transcript  pgup/pgdn scroll  ctrl-o approval  ctrl-c exit"
-            } else {
-                hint = "tab navigation  composer state retained  ctrl-o approval  ctrl-c exit"
-            }
-
-            frame.write(
-                TerminalStyle.dim.apply(
-                    hint
-                ),
-                in: TerminalRegion(
-                    top: footer.top + 3,
-                    leading: footer.leading,
-                    rows: 1,
-                    columns: footer.columns
-                )
+        if footer.rows > 0 {
+            let commandRegion = TerminalRegion(
+                top: footer.bottom - 1,
+                leading: footer.leading,
+                rows: 1,
+                columns: footer.columns
             )
+
+            if commandLine.hasPresentation {
+                commandLine.render(
+                    into: &frame,
+                    in: commandRegion,
+                    isFocused: composerFocused
+                )
+            } else {
+                let hint: String
+
+                if navigationFocused {
+                    hint = "j/k navigate  enter open  tab composer  esc back"
+                } else if timelineFocused {
+                    hint = "j/k select step  enter inspect  esc back"
+                } else if transcriptFocused {
+                    hint = "j/k select message  enter inspect  tab navigation  esc back"
+                } else if destination == .current {
+                    hint = "enter edit · ctrl-enter submit · ctrl-c normal · :w save · :q quit · ctrl-f expand"
+                } else {
+                    hint = "tab navigation  composer retained  ctrl-o approval  esc back"
+                }
+
+                frame.write(
+                    TerminalStyle.dim.apply(
+                        hint
+                    ),
+                    in: commandRegion
+                )
+            }
         }
 
         return frame
@@ -1634,6 +1924,76 @@ enum TerminalOverlaySmoke {
         selectedMessageID = messages[nextIndex].id
     }
 
+    private static func renderQuitConfirmation(
+        into frame: inout TerminalFrame,
+        in root: TerminalRegion,
+        confirmation: TerminalListControl<
+            QuitItem,
+            TerminalOverlaySmokeQuitChoice
+        >
+    ) {
+        let overlay = TerminalOverlay(
+            placement: .centered(
+                columns: 44,
+                rows: 9
+            ),
+            outerInsets: TerminalInsets(
+                vertical: 1,
+                horizontal: 2
+            )
+        )
+        let content = overlay.render(
+            into: &frame,
+            in: root,
+            title: "quit terminal shell?"
+        )
+
+        guard !content.isEmpty else {
+            return
+        }
+
+        var lines = [
+            TerminalStyle.bold.apply(
+                "Quit the current terminal session?"
+            ),
+            TerminalStyle.dim.apply(
+                "The current composer state will be discarded."
+            ),
+            "",
+        ]
+
+        for row in confirmation.rows() {
+            if row.isCurrent {
+                lines.append(
+                    TerminalStyle(
+                        .inverse
+                    ).apply(
+                        TerminalDisplay.fitted(
+                            "> " + row.item.title,
+                            columns: content.columns
+                        )
+                    )
+                )
+            } else {
+                lines.append(
+                    "  " + row.item.title
+                )
+            }
+        }
+
+        lines.append("")
+        lines.append(
+            TerminalStyle.dim.apply(
+                "↑/↓ choose  enter confirm  esc/ctrl-c cancel"
+            )
+        )
+
+        frame.write(
+            lines,
+            in: content
+        )
+    }
+
     private static func renderApproval(
         into frame: inout TerminalFrame,
         in root: TerminalRegion,
@@ -1862,6 +2222,82 @@ enum TerminalOverlaySmoke {
         }
     }
 
+    private static func renderComposerSheet(
+        into frame: inout TerminalFrame,
+        in root: TerminalRegion,
+        composer: inout TerminalTextSurface,
+        commandLine: TerminalCommandLine
+    ) {
+        let overlay = TerminalOverlay(
+            placement: .centered(
+                columns: max(
+                    0,
+                    root.columns - 4
+                ),
+                rows: max(
+                    0,
+                    root.rows - 2
+                )
+            ),
+            outerInsets: .zero,
+            contentInsets: TerminalInsets(
+                vertical: 0,
+                horizontal: 1
+            )
+        )
+        let content = overlay.render(
+            into: &frame,
+            in: root,
+            title: "message editor"
+        )
+
+        guard !content.isEmpty else {
+            return
+        }
+
+        let editorRows = max(
+            0,
+            content.rows - 1
+        )
+
+        if editorRows > 0 {
+            composer.render(
+                into: &frame,
+                in: TerminalRegion(
+                    top: content.top,
+                    leading: content.leading,
+                    rows: editorRows,
+                    columns: content.columns
+                ),
+                isFocused: true
+            )
+        }
+
+        if content.rows > 0 {
+            let commandRegion = TerminalRegion(
+                top: content.bottom - 1,
+                leading: content.leading,
+                rows: 1,
+                columns: content.columns
+            )
+
+            if commandLine.hasPresentation {
+                commandLine.render(
+                    into: &frame,
+                    in: commandRegion,
+                    isFocused: true
+                )
+            } else {
+                frame.write(
+                    TerminalStyle.dim.apply(
+                        "mode \(composer.mode) · ctrl-enter submit · ctrl-c normal · :w save · :q compact · ctrl-f compact"
+                    ),
+                    in: commandRegion
+                )
+            }
+        }
+    }
+
     private static func renderEditor(
         into frame: inout TerminalFrame,
         in root: TerminalRegion,
@@ -1908,7 +2344,7 @@ enum TerminalOverlaySmoke {
         if content.rows > 0 {
             frame.write(
                 TerminalStyle.dim.apply(
-                    "mode \(editor.mode)  i insert  v visual  esc normal/close  h/j/k/l move"
+                    "mode \(editor.mode)  i insert  v visual  ctrl-c normal/close  h/j/k/l move  esc normal/close"
                 ),
                 in: TerminalRegion(
                     top: content.bottom - 1,

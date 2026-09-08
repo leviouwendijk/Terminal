@@ -16,6 +16,7 @@ enum TerminalInputFoundationSmoke {
         case unexpectedBracketedPasteSession
         case unexpectedComposerPaste
         case unexpectedEventBatch
+        case unexpectedKeyStroke
     }
 
     static func run() throws {
@@ -27,6 +28,7 @@ enum TerminalInputFoundationSmoke {
 
         #if canImport(Darwin)
         try runUTF8Probe()
+        try runKeyStrokeProbe()
         try runPasteProbe()
         try runLegacyPasteProbe()
         try runEventBatchProbe()
@@ -96,6 +98,48 @@ enum TerminalInputFoundationSmoke {
                 .char("🙂")
             ) else {
                 throw Failure.unexpectedUTF8
+            }
+        }
+    }
+
+    private static func runKeyStrokeProbe() throws {
+        let encoded =
+            "\u{001B}[13;5u"
+            + "\u{001B}[97;1;97u"
+            + "\u{001B}[57442;5u"
+            + "\u{001B}[99;5u"
+
+        try withReader(
+            bytes: Array(
+                encoded.utf8
+            )
+        ) { reader in
+            guard reader.readEvent() == .keyStroke(
+                TerminalKeyStroke(
+                    key: .enter,
+                    modifiers: .control
+                )
+            ),
+            reader.readEvent() == .keyStroke(
+                TerminalKeyStroke(
+                    key: .char("a")
+                )
+            ) else {
+                throw Failure.unexpectedKeyStroke
+            }
+
+            let modifierEvent = reader.readEvent()
+
+            guard case .keyStroke(let modifierStroke) = modifierEvent,
+                  case .unknown = modifierStroke.key,
+                  modifierStroke.modifiers == .control,
+                  reader.readEvent() == .keyStroke(
+                    TerminalKeyStroke(
+                        key: .control("C"),
+                        modifiers: .control
+                    )
+                  ) else {
+                throw Failure.unexpectedKeyStroke
             }
         }
     }

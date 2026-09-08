@@ -116,6 +116,14 @@ public struct TerminalKeyReader: Sendable {
             )
         }
 
+        if let keyStroke = decodeCSIUKeyStroke(
+            sequence
+        ) {
+            return .keyStroke(
+                keyStroke
+            )
+        }
+
         return .key(
             decodeCSIBytes(
                 sequence
@@ -142,6 +150,199 @@ public struct TerminalKeyReader: Sendable {
         }
 
         return bytes
+    }
+
+    private func decodeCSIUKeyStroke(
+        _ bytes: [UInt8]
+    ) -> TerminalKeyStroke? {
+        guard bytes.last == 0x75 else {
+            return nil
+        }
+
+        let payload = String(
+            decoding: bytes.dropLast(),
+            as: UTF8.self
+        )
+        let fields = payload.split(
+            separator: ";",
+            omittingEmptySubsequences: false
+        )
+
+        guard let keyField = fields.first,
+              let keyComponent = keyField.split(
+                separator: ":",
+                omittingEmptySubsequences: false
+              ).first,
+              let keyCode = Int(
+                keyComponent
+              ) else {
+            return nil
+        }
+
+        let encodedModifiers: Int
+
+        if fields.count > 1,
+           let modifierComponent = fields[1].split(
+            separator: ":",
+            omittingEmptySubsequences: false
+           ).first,
+           let value = Int(
+            modifierComponent
+           ) {
+            encodedModifiers = value
+        } else {
+            encodedModifiers = 1
+        }
+
+        let modifierBits = max(
+            0,
+            encodedModifiers - 1
+        )
+        let modifiers = TerminalKeyModifiers(
+            rawValue: UInt16(
+                min(
+                    modifierBits,
+                    Int(UInt16.max)
+                )
+            )
+        )
+        let associatedText = fields.count > 2
+            ? decodeCSIUAssociatedText(
+                fields[2]
+            )
+            : nil
+        let key = decodeCSIUKey(
+            keyCode,
+            modifiers: modifiers,
+            associatedText: associatedText,
+            rawBytes: bytes
+        )
+
+        return TerminalKeyStroke(
+            key: key,
+            modifiers: modifiers
+        )
+    }
+
+    private func decodeCSIUAssociatedText(
+        _ field: Substring
+    ) -> String? {
+        guard !field.isEmpty else {
+            return nil
+        }
+
+        var text = ""
+
+        for component in field.split(
+            separator: ":",
+            omittingEmptySubsequences: false
+        ) {
+            guard let value = UInt32(
+                component
+            ),
+            let scalar = UnicodeScalar(
+                value
+            ) else {
+                return nil
+            }
+
+            text += String(
+                scalar
+            )
+        }
+
+        return text.isEmpty
+            ? nil
+            : text
+    }
+
+    private func decodeCSIUKey(
+        _ keyCode: Int,
+        modifiers: TerminalKeyModifiers,
+        associatedText: String?,
+        rawBytes: [UInt8]
+    ) -> TerminalKey {
+        switch keyCode {
+        case 9:
+            return .tab
+
+        case 13:
+            return .enter
+
+        case 27:
+            return .escape
+
+        case 32:
+            return modifiers.contains(
+                .control
+            )
+                ? .controlSpace
+                : .space
+
+        case 127:
+            return .backspace
+
+        default:
+            break
+        }
+
+        if modifiers.contains(
+            .control
+        ),
+        (65...90).contains(
+            keyCode
+        ) || (97...122).contains(
+            keyCode
+        ),
+        let scalar = UnicodeScalar(
+            UInt32(
+                keyCode
+            )
+        ) {
+            return .control(
+                String(
+                    scalar
+                ).uppercased()
+            )
+        }
+
+        if (57_344...63_743).contains(
+            keyCode
+        ) {
+            return .unknown(
+                [
+                    0x1B,
+                    0x5B,
+                ] + rawBytes
+            )
+        }
+
+        if let associatedText,
+           !associatedText.isEmpty {
+            return .char(
+                associatedText
+            )
+        }
+
+        if keyCode >= 0x20,
+           let scalar = UnicodeScalar(
+            UInt32(
+                keyCode
+            )
+           ) {
+            return .char(
+                String(
+                    scalar
+                )
+            )
+        }
+
+        return .unknown(
+            [
+                0x1B,
+                0x5B,
+            ] + rawBytes
+        )
     }
 
     private func decodeCSIBytes(

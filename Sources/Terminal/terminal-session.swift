@@ -23,12 +23,54 @@ public enum TerminalSessionError: Error, Sendable, LocalizedError {
     }
 }
 
+public enum TerminalKeyboardProtocol:
+    String,
+    Sendable,
+    Codable,
+    Hashable
+{
+    case legacy
+    case kitty
+
+    public var activationSequence: String? {
+        switch self {
+        case .legacy:
+            return nil
+
+        case .kitty:
+            return "\u{001B}[>25u"
+        }
+    }
+
+    public var restorationSequence: String? {
+        switch self {
+        case .legacy:
+            return nil
+
+        case .kitty:
+            return "\u{001B}[<u"
+        }
+    }
+}
+
+public enum TerminalControlSignalBehavior:
+    String,
+    Sendable,
+    Codable,
+    Hashable
+{
+    case signals
+    case input
+}
+
 public final class TerminalSession: @unchecked Sendable {
     public struct Options: Sendable, Codable, Hashable {
         public var useAlternateScreen: Bool
         public var hideCursor: Bool
         public var useRawMode: Bool
         public var useBracketedPaste: Bool
+        public var keyboardProtocol: TerminalKeyboardProtocol
+        public var controlSignalBehavior: TerminalControlSignalBehavior
         public var restoreOnInterrupt: Bool
         public var outputStream: TerminalStream
 
@@ -37,6 +79,8 @@ public final class TerminalSession: @unchecked Sendable {
             hideCursor: Bool = false,
             useRawMode: Bool = false,
             useBracketedPaste: Bool = false,
+            keyboardProtocol: TerminalKeyboardProtocol = .legacy,
+            controlSignalBehavior: TerminalControlSignalBehavior = .signals,
             restoreOnInterrupt: Bool = true,
             outputStream: TerminalStream = .standardError
         ) {
@@ -44,6 +88,8 @@ public final class TerminalSession: @unchecked Sendable {
             self.hideCursor = hideCursor
             self.useRawMode = useRawMode
             self.useBracketedPaste = useBracketedPaste
+            self.keyboardProtocol = keyboardProtocol
+            self.controlSignalBehavior = controlSignalBehavior
             self.restoreOnInterrupt = restoreOnInterrupt
             self.outputStream = outputStream
         }
@@ -99,6 +145,15 @@ public final class TerminalSession: @unchecked Sendable {
                 inputFileDescriptor,
                 TCSANOW,
                 &restoredAttributes
+            )
+        }
+
+        if let restorationSequence =
+            options.keyboardProtocol.restorationSequence
+        {
+            Terminal.write(
+                restorationSequence,
+                to: options.outputStream
             )
         }
 
@@ -174,11 +229,22 @@ public final class TerminalSession: @unchecked Sendable {
                 leaveAlternateScreenOnInterrupt:
                     options.useAlternateScreen,
                 disableBracketedPasteOnInterrupt:
-                    options.useBracketedPaste
+                    options.useBracketedPaste,
+                popKeyboardProtocolOnInterrupt:
+                    options.keyboardProtocol == .kitty
             )
 
         if options.useAlternateScreen {
             Terminal.enterAlternateScreen(
+                to: options.outputStream
+            )
+        }
+
+        if let activationSequence =
+            options.keyboardProtocol.activationSequence
+        {
+            Terminal.write(
+                activationSequence,
                 to: options.outputStream
             )
         }
@@ -203,7 +269,18 @@ public final class TerminalSession: @unchecked Sendable {
                     | ICANON
                     | IEXTEN
             )
-            interactiveAttributes.c_lflag |= tcflag_t(ISIG)
+
+            switch options.controlSignalBehavior {
+            case .signals:
+                interactiveAttributes.c_lflag |= tcflag_t(
+                    ISIG
+                )
+
+            case .input:
+                interactiveAttributes.c_lflag &= ~tcflag_t(
+                    ISIG
+                )
+            }
 
             interactiveAttributes.c_iflag &= ~tcflag_t(IXON)
 
@@ -276,6 +353,7 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
         let showCursorOnInterrupt: Bool
         let leaveAlternateScreenOnInterrupt: Bool
         let disableBracketedPasteOnInterrupt: Bool
+        let popKeyboardProtocolOnInterrupt: Bool
     }
 
     private var entries: [Entry] = []
@@ -286,7 +364,8 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
         _ attributes: termios,
         showCursorOnInterrupt: Bool,
         leaveAlternateScreenOnInterrupt: Bool,
-        disableBracketedPasteOnInterrupt: Bool
+        disableBracketedPasteOnInterrupt: Bool,
+        popKeyboardProtocolOnInterrupt: Bool
     ) -> UInt64 {
         let id = nextID
 
@@ -305,7 +384,9 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
                 leaveAlternateScreenOnInterrupt:
                     leaveAlternateScreenOnInterrupt,
                 disableBracketedPasteOnInterrupt:
-                    disableBracketedPasteOnInterrupt
+                    disableBracketedPasteOnInterrupt,
+                popKeyboardProtocolOnInterrupt:
+                    popKeyboardProtocolOnInterrupt
             )
         )
 
@@ -347,8 +428,16 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
             entries.contains {
                 $0.disableBracketedPasteOnInterrupt
             }
+        let popKeyboardProtocolOnInterrupt =
+            entries.contains {
+                $0.popKeyboardProtocolOnInterrupt
+            }
 
         var sequence = "\u{001B}[0 q"
+
+        if popKeyboardProtocolOnInterrupt {
+            sequence += "\u{001B}[<u"
+        }
 
         if disableBracketedPasteOnInterrupt {
             sequence += "\u{001B}[?2004l"

@@ -8,6 +8,7 @@ public enum TerminalTextEditorEvent:
 {
     case changed
     case copied(String)
+    case commandLineRequested
     case cancelRequested
 }
 
@@ -214,6 +215,11 @@ public struct TerminalTextEditor:
                 key
             )
 
+        case .keyStroke(let keyStroke):
+            return handle(
+                keyStroke.key
+            )
+
         case .paste(let text):
             return insertPastedText(
                 text
@@ -318,6 +324,9 @@ public struct TerminalTextEditor:
             self.selection = selection
 
             return .changed
+
+        case .enterCommandLine:
+            return .commandLineRequested
 
         case .returnToNormal:
             _ = finalizeBlockInsertSession()

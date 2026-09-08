@@ -38,6 +38,11 @@ public struct TerminalTextInputControl:
                 key
             )
 
+        case .keyStroke(let keyStroke):
+            return handle(
+                keyStroke.key
+            )
+
         case .paste(let text):
             let text = normalizedPaste(
                 text

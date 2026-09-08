@@ -10,6 +10,7 @@ enum TerminalTestCommand: String {
     case listReview = "list-review"
     case navigation
     case settings
+    case textSurface = "text-surface-lab"
     case tuiFoundation = "tui-foundation"
     case frame
     case shell
@@ -76,6 +77,9 @@ struct TerminalTest {
             case .settings:
                 try TerminalSettingsMenuSmoke.run()
 
+            case .textSurface:
+                try TerminalTextSurfaceLab.run()
+
             case .tuiFoundation:
                 try TerminalTUIFoundationSmoke.run()
 
@@ -137,6 +141,7 @@ struct TerminalTest {
                 swift run termtest list-review
                 swift run termtest navigation
                 swift run termtest settings
+                swift run termtest text-surface-lab
                 swift run termtest tui-foundation
                 swift run termtest frame
                 swift run termtest shell
@@ -157,6 +162,7 @@ struct TerminalTest {
                 list-review   Multi-select review list with colored collapsed summary.
                 navigation     Verify shared navigation defaults.
                 settings       Verify reusable settings-menu navigation and rendering.
+                text-surface-lab Interactively exercise compact/expanded modal text editing.
                 tui-foundation Verify reusable TUI state, display, frame, and layout primitives.
                 frame          Inspect persistent dirty-row frame composition interactively.
                 shell          Run the persistent interactive shell composition laboratory.

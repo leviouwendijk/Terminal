@@ -52,7 +52,7 @@
       "location" : "https://github.com/leviouwendijk/Primitives.git",
       "state" : {
         "branch" : "master",
-        "revision" : "99df450665a2a6b4d9f91cda59b6bcc17e0b2d6f"
+        "revision" : "e626fa0746aee024729bf56549e774d13aa17099"
       }
     },
     {
@@ -70,7 +70,7 @@
       "location" : "https://github.com/leviouwendijk/Swim",
       "state" : {
         "branch" : "master",
-        "revision" : "6f4e9233dae06fc69ef2ec8b9cc1ce796c197a44"
+        "revision" : "5d78adc0f34d4b62e35a92725fda2ab444bb4e99"
       }
     },
     {
