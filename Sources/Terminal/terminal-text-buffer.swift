@@ -240,6 +240,51 @@ public struct TerminalTextBuffer:
         return true
     }
 
+    @discardableResult
+    public mutating func replaceCharactersOnLine(
+        count rawCount: Int = 1,
+        with replacement: String
+    ) -> Bool {
+        let count = max(
+            1,
+            rawCount
+        )
+        let replacement = Self.normalized(
+            replacement
+        )
+        let lineEnd = lineEndOffset(
+            for: cursorOffset
+        )
+        let available = max(
+            0,
+            lineEnd - cursorOffset
+        )
+
+        guard replacement.count == 1,
+              count <= available else {
+            return false
+        }
+
+        let start = cursorOffset
+        let range = start..<(start + count)
+        let repeated = String(
+            repeating: replacement,
+            count: count
+        )
+
+        guard replace(
+            range,
+            with: repeated
+        ) else {
+            return false
+        }
+
+        _ = setCursor(
+            offset: start + count - 1
+        )
+        return true
+    }
+
     public func text(
         in requestedRange: Range<Int>
     ) -> String {
@@ -274,6 +319,16 @@ public struct TerminalTextBuffer:
     ) -> Bool {
         setCursor(
             cursorOffset + max(0, amount),
+            preservingPreferredColumn: false
+        )
+    }
+
+    @discardableResult
+    public mutating func move(
+        toOffset offset: Int
+    ) -> Bool {
+        setCursor(
+            offset,
             preservingPreferredColumn: false
         )
     }
@@ -314,6 +369,365 @@ public struct TerminalTextBuffer:
             ),
             preservingPreferredColumn: false
         )
+    }
+
+    @discardableResult
+    public mutating func moveToFirstNonWhitespaceOnLine() -> Bool {
+        let characters = Array(
+            text
+        )
+        let start = lineStartOffset(
+            for: cursorOffset
+        )
+        let end = lineEndOffset(
+            for: cursorOffset
+        )
+        var target = start
+
+        while target < end,
+              characters[target] == " "
+                || characters[target] == "\t"
+        {
+            target += 1
+        }
+
+        if target == end {
+            target = start
+        }
+
+        return setCursor(
+            target,
+            preservingPreferredColumn: false
+        )
+    }
+
+    @discardableResult
+    public mutating func openLineBelow() -> Bool {
+        let end = lineEndOffset(
+            for: cursorOffset
+        )
+        let characters = Array(
+            text
+        )
+        let insertionOffset: Int
+        let cursorOffset: Int
+
+        if end < characters.count,
+           characters[end] == "\n"
+        {
+            insertionOffset = end + 1
+            cursorOffset = insertionOffset
+        } else {
+            insertionOffset = end
+            cursorOffset = end + 1
+        }
+
+        text.insert(
+            "\n",
+            at: index(
+                at: insertionOffset
+            )
+        )
+        self.cursorOffset = cursorOffset
+        preferredColumn = nil
+        return true
+    }
+
+    @discardableResult
+    public mutating func openLineAbove() -> Bool {
+        let start = lineStartOffset(
+            for: cursorOffset
+        )
+
+        text.insert(
+            "\n",
+            at: index(
+                at: start
+            )
+        )
+        cursorOffset = start
+        preferredColumn = nil
+        return true
+    }
+
+    @discardableResult
+    public mutating func joinLines(
+        count rawCount: Int = 2
+    ) -> Bool {
+        let count = max(
+            2,
+            rawCount
+        )
+        var joinedCount = 0
+        var firstJoinOffset: Int?
+
+        while joinedCount < count - 1 {
+            let end = lineEndOffset(
+                for: firstJoinOffset ?? cursorOffset
+            )
+
+            guard end < text.count else {
+                break
+            }
+
+            let characters = Array(
+                text
+            )
+            let nextStart = end + 1
+            let nextEnd = lineEndOffset(
+                for: nextStart
+            )
+            var contentStart = nextStart
+
+            while contentStart < nextEnd,
+                  characters[contentStart] == " "
+                    || characters[contentStart] == "\t"
+            {
+                contentStart += 1
+            }
+
+            let currentStart = lineStartOffset(
+                for: end
+            )
+            let currentIsEmpty = end == currentStart
+            let nextIsEmpty = contentStart == nextEnd
+            let currentEndsInWhitespace =
+                end > currentStart
+                && (
+                    characters[end - 1] == " "
+                    || characters[end - 1] == "\t"
+                )
+            let separator =
+                currentIsEmpty
+                || nextIsEmpty
+                || currentEndsInWhitespace
+                ? ""
+                : " "
+
+            guard replace(
+                end..<contentStart,
+                with: separator
+            ) else {
+                break
+            }
+
+            if firstJoinOffset == nil {
+                firstJoinOffset = end
+            }
+
+            joinedCount += 1
+        }
+
+        guard let firstJoinOffset,
+              joinedCount > 0 else {
+            return false
+        }
+
+        _ = setCursor(
+            offset: firstJoinOffset
+        )
+        return true
+    }
+
+    @discardableResult
+    public mutating func toggleCaseOnLine(
+        count rawCount: Int = 1
+    ) -> Bool {
+        let start = cursorOffset
+        let end = lineEndOffset(
+            for: start
+        )
+        let sourceCount = min(
+            max(
+                1,
+                rawCount
+            ),
+            max(
+                0,
+                end - start
+            )
+        )
+
+        guard sourceCount > 0 else {
+            return false
+        }
+
+        let characters = Array(
+            text
+        )
+        let sourceRange = start..<(start + sourceCount)
+        var replacement = ""
+
+        for character in characters[sourceRange] {
+            let value = String(
+                character
+            )
+            let lower = value.lowercased()
+            let upper = value.uppercased()
+
+            if value == lower,
+               value != upper
+            {
+                replacement += upper
+            } else if value == upper,
+                      value != lower
+            {
+                replacement += lower
+            } else {
+                replacement += value
+            }
+        }
+
+        guard replace(
+            sourceRange,
+            with: replacement
+        ) else {
+            return false
+        }
+
+        let target: Int
+
+        if sourceRange.upperBound == end {
+            target = max(
+                start,
+                start + replacement.count - 1
+            )
+        } else {
+            target = start + replacement.count
+        }
+
+        _ = setCursor(
+            offset: target
+        )
+        return true
+    }
+
+    @discardableResult
+    public mutating func shiftLines(
+        in requestedRange: Range<Int>,
+        direction: TerminalIndentationShift,
+        width rawWidth: Int = 4
+    ) -> Bool {
+        let width = max(
+            1,
+            rawWidth
+        )
+        let characters = Array(
+            text
+        )
+
+        guard !characters.isEmpty,
+              requestedRange.lowerBound
+                < requestedRange.upperBound else {
+            return false
+        }
+
+        let lower = min(
+            max(
+                0,
+                requestedRange.lowerBound
+            ),
+            characters.count - 1
+        )
+        let upperInclusive = min(
+            max(
+                lower,
+                requestedRange.upperBound - 1
+            ),
+            characters.count - 1
+        )
+        let firstStart = lineStartOffset(
+            for: lower
+        )
+        let lastStart = lineStartOffset(
+            for: upperInclusive
+        )
+        var lineStarts: [Int] = []
+        var start = firstStart
+
+        while start <= lastStart {
+            lineStarts.append(
+                start
+            )
+
+            let end = lineEndOffset(
+                for: start
+            )
+
+            guard end < characters.count else {
+                break
+            }
+
+            start = end + 1
+        }
+
+        var changed = false
+
+        for start in lineStarts.reversed() {
+            let current = Array(
+                text
+            )
+            let end = lineEndOffset(
+                for: start
+            )
+
+            guard end > start else {
+                continue
+            }
+
+            switch direction {
+            case .right:
+                text.insert(
+                    contentsOf: String(
+                        repeating: " ",
+                        count: width
+                    ),
+                    at: index(
+                        at: start
+                    )
+                )
+                changed = true
+
+            case .left:
+                var offset = start
+                var consumed = 0
+
+                while offset < end,
+                      consumed < width
+                {
+                    if current[offset] == " " {
+                        consumed += 1
+                        offset += 1
+                    } else if current[offset] == "\t" {
+                        consumed = width
+                        offset += 1
+                    } else {
+                        break
+                    }
+                }
+
+                guard offset > start else {
+                    continue
+                }
+
+                text.removeSubrange(
+                    index(at: start)..<index(at: offset)
+                )
+                changed = true
+            }
+        }
+
+        guard changed else {
+            return false
+        }
+
+        cursorOffset = min(
+            firstStart,
+            text.count
+        )
+        preferredColumn = nil
+        _ = moveToFirstNonWhitespaceOnLine()
+        return true
     }
 
     @discardableResult

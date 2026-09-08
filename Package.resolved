@@ -1,5 +1,5 @@
 {
-  "originHash" : "1d9c76c5908a80a58f3dcae71858ef46d0f135559bc38761ee8827dadae0b227",
+  "originHash" : "c1cff2f6ae90ede7af7681fc01630c83a3339cce72d7034c19b71e462ef913de",
   "pins" : [
     {
       "identity" : "ansi",
@@ -8,6 +8,24 @@
       "state" : {
         "branch" : "master",
         "revision" : "073d9ca7870b688a312608acf14eae6ba052c0d6"
+      }
+    },
+    {
+      "identity" : "arguments",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/Arguments.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "d4ea1ad418c54380fde04cefacf5d59fa90054ba"
+      }
+    },
+    {
+      "identity" : "clipboard",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/Clipboard",
+      "state" : {
+        "branch" : "master",
+        "revision" : "01f5f9aa53fe3dd2cb3e227117e4a850e4be05c6"
       }
     },
     {
@@ -29,12 +47,39 @@
       }
     },
     {
+      "identity" : "primitives",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/Primitives.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "99df450665a2a6b4d9f91cda59b6bcc17e0b2d6f"
+      }
+    },
+    {
       "identity" : "strings",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/leviouwendijk/Strings",
       "state" : {
         "branch" : "master",
         "revision" : "86a939d7bbb3e25808f88fbcedcee4069a5a5ae1"
+      }
+    },
+    {
+      "identity" : "swim",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/Swim",
+      "state" : {
+        "branch" : "master",
+        "revision" : "18f6ca409965d8b418c310eeabf23c6b64ceab9d"
+      }
+    },
+    {
+      "identity" : "testflows",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/TestFlows.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "ef72deb44f924372959189d0c258c5cf7e2ba8ae"
       }
     }
   ],

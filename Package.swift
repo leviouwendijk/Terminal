@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "Terminal",
     platforms: [
-        .macOS(.v11)
+        .macOS(.v13)
     ],
     products: [
         .library(
@@ -29,15 +29,25 @@ let package = Package(
         .package(url: "https://github.com/leviouwendijk/Difference", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Strings", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/DSL", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/Clipboard", branch: "master"),
+        .package(
+            url: "https://github.com/leviouwendijk/Swim",
+            branch: "master"
+        ),
 
     ],
     targets: [
         .target(
             name: "Terminal",
             dependencies: [
+                .product(
+                    name: "Swim",
+                    package: "Swim"
+                ),
                 .product(name: "ANSI", package: "ANSI"),
                 .product(name: "Difference", package: "Difference"),
                 .product(name: "Strings", package: "Strings"),
+                .product(name: "Clipboard", package: "Clipboard"),
             ],
         ),
         .target(

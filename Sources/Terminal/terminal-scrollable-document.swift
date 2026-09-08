@@ -179,28 +179,87 @@ public struct TerminalScrollableDocument:
     public mutating func handle(
         _ action: TerminalInteractionAction
     ) -> Bool {
-        guard case .motion(let motion) = action else {
+        switch action {
+        case .motion(let motion):
+            return handleMotion(
+                motion,
+                count: 1
+            )
+
+        case .command(
+            .motion(
+                let motion,
+                count: let count
+            )
+        ):
+            return handleMotion(
+                motion,
+                count: count
+            )
+
+        case .command(
+            .operate
+        ):
+            return false
+
+        default:
             return false
         }
+    }
+
+    private mutating func handleMotion(
+        _ motion: TerminalMotion,
+        count rawCount: Int
+    ) -> Bool {
+        let count = min(
+            max(
+                1,
+                rawCount
+            ),
+            max(
+                1,
+                lines.count + 1
+            )
+        )
 
         switch motion {
         case .up:
             isFollowingEnd = false
-            viewport.scrollUp()
+            viewport.scrollUp(
+                by: count
+            )
             return true
 
         case .down:
-            viewport.scrollDown()
+            viewport.scrollDown(
+                by: count
+            )
             isFollowingEnd = viewport.isAtEnd
             return true
 
         case .pageUp:
             isFollowingEnd = false
-            viewport.pageUp()
+            viewport.scrollUp(
+                by: multipliedCount(
+                    count,
+                    max(
+                        1,
+                        viewport.visibleRows - 1
+                    )
+                )
+            )
             return true
 
         case .pageDown:
-            viewport.pageDown()
+            viewport.scrollDown(
+                by: multipliedCount(
+                    count,
+                    max(
+                        1,
+                        viewport.visibleRows - 1
+                    )
+                )
+            )
             isFollowingEnd = viewport.isAtEnd
             return true
 
@@ -221,6 +280,25 @@ public struct TerminalScrollableDocument:
              .lineEnd:
             return false
         }
+    }
+
+    private func multipliedCount(
+        _ lhs: Int,
+        _ rhs: Int
+    ) -> Int {
+        let (
+            value,
+            overflow
+        ) = lhs.multipliedReportingOverflow(
+            by: rhs
+        )
+
+        return overflow
+            ? Int.max
+            : max(
+                1,
+                value
+            )
     }
 
     public mutating func render(

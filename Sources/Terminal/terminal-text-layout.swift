@@ -36,6 +36,83 @@ public struct TerminalTextLayoutRow:
 
         return columnOffsets[local]
     }
+
+    public func sourceOffset(
+        atColumn requestedColumn: Int
+    ) -> Int {
+        let column = max(
+            0,
+            requestedColumn
+        )
+
+        for local in 0..<max(
+            0,
+            columnOffsets.count - 1
+        ) {
+            if column < columnOffsets[
+                local + 1
+            ] {
+                return min(
+                    sourceRange.upperBound,
+                    sourceRange.lowerBound + local
+                )
+            }
+        }
+
+        return sourceRange.upperBound
+    }
+
+    public func sourceRange(
+        overlappingColumns requestedColumns: Range<Int>
+    ) -> Range<Int>? {
+        let lower = max(
+            0,
+            requestedColumns.lowerBound
+        )
+        let upper = max(
+            lower,
+            requestedColumns.upperBound
+        )
+
+        guard lower < upper else {
+            return nil
+        }
+
+        var first: Int?
+        var last: Int?
+
+        for local in 0..<max(
+            0,
+            columnOffsets.count - 1
+        ) {
+            let characterLower = columnOffsets[
+                local
+            ]
+            let characterUpper = columnOffsets[
+                local + 1
+            ]
+
+            guard characterLower < upper,
+                  characterUpper > lower else {
+                continue
+            }
+
+            first = first ?? local
+            last = local
+        }
+
+        guard let first,
+              let last else {
+            return nil
+        }
+
+        return (
+            sourceRange.lowerBound + first
+        )..<min(
+            sourceRange.upperBound,
+            sourceRange.lowerBound + last + 1
+        )
+    }
 }
 
 public struct TerminalTextLayout:
