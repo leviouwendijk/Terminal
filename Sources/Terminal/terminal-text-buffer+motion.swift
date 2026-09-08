@@ -1,7 +1,9 @@
+import Swim
+
 public extension TerminalTextBuffer {
     @discardableResult
     mutating func move(
-        _ motion: TerminalMotion,
+        _ motion: Swim.Motion,
         count rawCount: Int = 1,
         pageRows rawPageRows: Int = 1
     ) -> Bool {

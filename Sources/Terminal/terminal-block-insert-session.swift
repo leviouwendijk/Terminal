@@ -1,20 +1,18 @@
 import Swim
 
-public typealias TerminalBlockInsertOperation = Swim.BlockInsertOperation
-
 public struct TerminalBlockInsertSession:
     Sendable,
     Codable,
     Hashable
 {
-    public let operation: TerminalBlockInsertOperation
+    public let operation: Swim.BlockInsertOperation
     public let rows: [Int]
     public let insertionColumn: Int
     public let primaryRow: Int
     public private(set) var insertedText: String
 
     public init(
-        operation: TerminalBlockInsertOperation,
+        operation: Swim.BlockInsertOperation,
         rows: [Int],
         insertionColumn: Int,
         primaryRow: Int,

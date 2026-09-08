@@ -1,4 +1,5 @@
 import Foundation
+import Swim
 
 public struct TerminalTextPosition:
     Sendable,
@@ -605,7 +606,7 @@ public struct TerminalTextBuffer:
     @discardableResult
     public mutating func shiftLines(
         in requestedRange: Range<Int>,
-        direction: TerminalIndentationShift,
+        direction: Swim.IndentationShift,
         width rawWidth: Int = 4
     ) -> Bool {
         let width = max(

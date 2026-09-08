@@ -1,3 +1,5 @@
+import Swim
+
 public enum TerminalRegisterValue:
     Sendable,
     Codable,
@@ -7,7 +9,7 @@ public enum TerminalRegisterValue:
     case line(String)
     case block([String])
 
-    public var kind: TerminalSelectionKind {
+    public var kind: Swim.SelectionKind {
         switch self {
         case .character:
             return .character

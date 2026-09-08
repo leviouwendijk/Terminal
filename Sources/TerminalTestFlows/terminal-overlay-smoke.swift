@@ -1,5 +1,6 @@
 import Difference
 import Foundation
+import Swim
 import Terminal
 
 private enum TerminalOverlaySmokeFocus:
@@ -355,7 +356,7 @@ enum TerminalOverlaySmoke {
         var inspectorDocument = TerminalScrollableDocument(
             visibleRows: 0
         )
-        var inspectorInteraction = TerminalModalInteraction(
+        var inspectorInteraction = Swim.ModalInteraction(
             mode: .normal
         )
         var messages = [
@@ -853,7 +854,7 @@ enum TerminalOverlaySmoke {
                 }
 
                 switch inspectorInteraction.handle(
-                    key
+                    key.swimInput
                 ) {
                 case .consumed:
                     continue

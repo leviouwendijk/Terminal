@@ -1,3 +1,5 @@
+import Swim
+
 public enum TerminalDocumentWrapping:
     Sendable,
     Hashable
@@ -177,7 +179,7 @@ public struct TerminalScrollableDocument:
 
     @discardableResult
     public mutating func handle(
-        _ action: TerminalInteractionAction
+        _ action: Swim.InteractionAction
     ) -> Bool {
         switch action {
         case .motion(let motion):
@@ -208,7 +210,7 @@ public struct TerminalScrollableDocument:
     }
 
     private mutating func handleMotion(
-        _ motion: TerminalMotion,
+        _ motion: Swim.Motion,
         count rawCount: Int
     ) -> Bool {
         let count = min(

@@ -1,7 +1,5 @@
 import Swim
 
-public typealias TerminalSelectionKind = Swim.SelectionKind
-
 public struct TerminalSelection:
     Sendable,
     Codable,
@@ -9,13 +7,13 @@ public struct TerminalSelection:
 {
     public let anchor: Int
     public var cursor: Int
-    public var kind: TerminalSelectionKind
+    public var kind: Swim.SelectionKind
     public var blockPreferredColumn: Int?
 
     public init(
         anchor: Int,
         cursor: Int,
-        kind: TerminalSelectionKind = .character,
+        kind: Swim.SelectionKind = .character,
         blockPreferredColumn: Int? = nil
     ) {
         self.anchor = anchor
@@ -299,7 +297,7 @@ public enum TerminalResolvedSelection:
 {
     case contiguous(
         range: Range<Int>,
-        kind: TerminalSelectionKind
+        kind: Swim.SelectionKind
     )
     case block(TerminalResolvedBlockSelection)
 

@@ -1,3 +1,5 @@
+import Swim
+
 public enum TerminalRegisterPaste {
     public static let maximumInsertedCharacterCount =
         1_000_000
@@ -5,7 +7,7 @@ public enum TerminalRegisterPaste {
     @discardableResult
     public static func apply(
         _ value: TerminalRegisterValue,
-        placement: TerminalPastePlacement,
+        placement: Swim.PastePlacement,
         count rawCount: Int = 1,
         to buffer: inout TerminalTextBuffer
     ) -> Bool {
@@ -43,7 +45,7 @@ public enum TerminalRegisterPaste {
 
     private static func pasteCharacter(
         _ text: String,
-        placement: TerminalPastePlacement,
+        placement: Swim.PastePlacement,
         count: Int,
         to buffer: inout TerminalTextBuffer
     ) -> Bool {
@@ -90,7 +92,7 @@ public enum TerminalRegisterPaste {
 
     private static func pasteLine(
         _ text: String,
-        placement: TerminalPastePlacement,
+        placement: Swim.PastePlacement,
         count: Int,
         to buffer: inout TerminalTextBuffer
     ) -> Bool {
@@ -183,7 +185,7 @@ public enum TerminalRegisterPaste {
 
     private static func pasteBlock(
         _ rows: [String],
-        placement: TerminalPastePlacement,
+        placement: Swim.PastePlacement,
         count: Int,
         to buffer: inout TerminalTextBuffer
     ) -> Bool {

@@ -1,3 +1,4 @@
+import Swim
 import Terminal
 
 enum TerminalInteractionFoundationSmoke {
@@ -20,7 +21,7 @@ enum TerminalInteractionFoundationSmoke {
     }
 
     private static func runModalInteractionProbe() throws {
-        var interaction = TerminalModalInteraction()
+        var interaction = Swim.ModalInteraction()
 
         guard interaction.mode == .normal,
               interaction.handle(

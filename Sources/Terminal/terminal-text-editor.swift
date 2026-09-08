@@ -16,7 +16,7 @@ public struct TerminalTextEditor:
     Hashable
 {
     public private(set) var buffer: TerminalTextBuffer
-    public private(set) var interaction: TerminalModalInteraction
+    public private(set) var interaction: Swim.ModalInteraction
     public private(set) var viewport: TerminalViewport
     public private(set) var selection: TerminalSelection?
     public private(set) var blockInsertSession: TerminalBlockInsertSession?
@@ -32,7 +32,7 @@ public struct TerminalTextEditor:
     public init(
         text: String = "",
         cursorOffset: Int? = nil,
-        mode: TerminalInteractionMode = .normal,
+        mode: Swim.Mode = .normal,
         visibleRows: Int = 0,
         shiftWidth: Int = 4,
         clipboard: TerminalClipboardDestination = .system,
@@ -42,7 +42,7 @@ public struct TerminalTextEditor:
             text: text,
             cursorOffset: cursorOffset
         )
-        self.interaction = TerminalModalInteraction(
+        self.interaction = Swim.ModalInteraction(
             mode: mode
         )
         self.viewport = TerminalViewport(
@@ -119,7 +119,7 @@ public struct TerminalTextEditor:
         )
     }
 
-    public var mode: TerminalInteractionMode {
+    public var mode: Swim.Mode {
         interaction.mode
     }
 
@@ -181,7 +181,7 @@ public struct TerminalTextEditor:
     }
 
     public mutating func setMode(
-        _ mode: TerminalInteractionMode
+        _ mode: Swim.Mode
     ) {
         interaction.setMode(
             mode
@@ -225,7 +225,7 @@ public struct TerminalTextEditor:
         _ key: TerminalKey
     ) -> TerminalTextEditorEvent? {
         switch interaction.handle(
-            key
+            key.swimInput
         ) {
         case .consumed:
             return nil
@@ -244,7 +244,7 @@ public struct TerminalTextEditor:
 
     @discardableResult
     public mutating func handle(
-        _ action: TerminalInteractionAction
+        _ action: Swim.InteractionAction
     ) -> TerminalTextEditorEvent? {
         yankPresentation = nil
 
@@ -510,7 +510,7 @@ public struct TerminalTextEditor:
     }
 
     private mutating func handleLiteral(
-        _ key: TerminalKey
+        _ key: Swim.Input
     ) -> TerminalTextEditorEvent? {
         if replaceSession != nil {
             return handleReplaceLiteral(
@@ -562,7 +562,7 @@ public struct TerminalTextEditor:
     }
 
     private mutating func handleReplaceLiteral(
-        _ key: TerminalKey
+        _ key: Swim.Input
     ) -> TerminalTextEditorEvent? {
         guard var session = replaceSession else {
             return nil
@@ -663,7 +663,7 @@ public struct TerminalTextEditor:
     }
 
     private mutating func handleBlockInsertLiteral(
-        _ key: TerminalKey
+        _ key: Swim.Input
     ) -> TerminalTextEditorEvent? {
         switch key {
         case .char(let character):
@@ -763,7 +763,7 @@ public struct TerminalTextEditor:
     }
 
     private mutating func beginBlockInsert(
-        _ operation: TerminalBlockInsertOperation
+        _ operation: Swim.BlockInsertOperation
     ) -> TerminalTextEditorEvent? {
         guard let selection,
               selection.kind == .block,
@@ -964,7 +964,7 @@ public struct TerminalTextEditor:
     }
 
     private mutating func handleCommand(
-        _ command: TerminalCommand
+        _ command: Swim.Command
     ) -> TerminalTextEditorEvent? {
         switch command {
         case .motion(
@@ -1037,7 +1037,7 @@ public struct TerminalTextEditor:
     }
 
     private mutating func handleEdit(
-        _ edit: TerminalEditCommand
+        _ edit: Swim.EditCommand
     ) -> TerminalTextEditorEvent {
         blockInsertSession = nil
         replaceSession = nil
@@ -1073,7 +1073,7 @@ public struct TerminalTextEditor:
     }
 
     private mutating func handleMotion(
-        _ motion: TerminalMotion,
+        _ motion: Swim.Motion,
         count rawCount: Int = 1
     ) -> Bool {
         let count = max(
@@ -1180,8 +1180,8 @@ public struct TerminalTextEditor:
     }
 
     private mutating func handleOperator(
-        _ operation: TerminalOperator,
-        target: TerminalCommandTarget
+        _ operation: Swim.Operator,
+        target: Swim.CommandTarget
     ) -> TerminalTextEditorEvent? {
         if operation == .shiftLeft
             || operation == .shiftRight
@@ -1197,7 +1197,7 @@ public struct TerminalTextEditor:
                 return nil
             }
 
-            let direction: TerminalIndentationShift =
+            let direction: Swim.IndentationShift =
                 operation == .shiftRight
                 ? .right
                 : .left

@@ -1,3 +1,5 @@
+import Swim
+
 public enum TerminalTextTargetKind:
     String,
     Sendable,
@@ -28,8 +30,8 @@ public struct TerminalResolvedTextTarget:
 
 public enum TerminalTextTargetResolver {
     public static func resolve(
-        _ target: TerminalCommandTarget,
-        for operation: TerminalOperator,
+        _ target: Swim.CommandTarget,
+        for operation: Swim.Operator,
         in buffer: TerminalTextBuffer,
         pageRows rawPageRows: Int = 1
     ) -> TerminalResolvedTextTarget? {
@@ -53,7 +55,7 @@ public enum TerminalTextTargetResolver {
     }
 
     public static func resolve(
-        _ target: TerminalCommandTarget,
+        _ target: Swim.CommandTarget,
         in buffer: TerminalTextBuffer,
         pageRows rawPageRows: Int = 1
     ) -> TerminalResolvedTextTarget? {
@@ -113,7 +115,7 @@ public enum TerminalTextTargetResolver {
     }
 
     private static func resolveMotion(
-        _ motion: TerminalMotion,
+        _ motion: Swim.Motion,
         count: Int,
         in buffer: TerminalTextBuffer,
         pageRows: Int
@@ -426,7 +428,7 @@ public enum TerminalTextTargetResolver {
 
     private static func adjustedForChange(
         _ resolved: TerminalResolvedTextTarget,
-        target: TerminalCommandTarget,
+        target: Swim.CommandTarget,
         in buffer: TerminalTextBuffer
     ) -> TerminalResolvedTextTarget {
         guard case .motion(
