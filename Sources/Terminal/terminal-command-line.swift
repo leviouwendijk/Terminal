@@ -1,48 +1,82 @@
-import Swim
+public enum TerminalCommandLineEvent:
+    Sendable,
+    Codable,
+    Hashable
+{
+    case changed
+    case submitted(String)
+    case cancelled
+}
 
 public struct TerminalCommandLine:
     Sendable,
     Hashable
 {
-    public private(set) var interaction: Swim.ExCommandLine
+    public private(set) var input: TerminalTextInput
+    public private(set) var isActive: Bool
     public var prompt: String
     public private(set) var status: String?
 
     public init(
-        interaction: Swim.ExCommandLine = .init(),
+        input: TerminalTextInput = .init(),
+        isActive: Bool = false,
         prompt: String = ":",
         status: String? = nil
     ) {
-        self.interaction = interaction
+        self.input = input
+        self.isActive = isActive
         self.prompt = prompt
         self.status = status
     }
 
-    public var isActive: Bool {
-        interaction.isActive
-    }
-
     public var hasPresentation: Bool {
-        interaction.isActive
-            || status != nil
+        isActive || status != nil
     }
 
     public var text: String {
-        interaction.text
+        input.text
     }
 
-    public mutating func begin() {
+    public mutating func begin(
+        text: String = ""
+    ) {
         status = nil
-        interaction.begin()
+        input.replace(
+            with: text
+        )
+        isActive = true
     }
 
     @discardableResult
     public mutating func handle(
         _ key: TerminalKey
-    ) -> Swim.ExCommandLineResult {
-        interaction.handle(
-            key.swimInput
-        )
+    ) -> TerminalCommandLineEvent? {
+        guard isActive else {
+            return nil
+        }
+
+        switch input.handle(
+            key
+        ) {
+        case .changed:
+            return .changed
+
+        case .submitRequested:
+            let submitted = input.text
+            isActive = false
+            input.clear()
+            return .submitted(
+                submitted
+            )
+
+        case .cancelRequested:
+            isActive = false
+            input.clear()
+            return .cancelled
+
+        case nil:
+            return nil
+        }
     }
 
     public mutating func setStatus(
@@ -64,8 +98,8 @@ public struct TerminalCommandLine:
             return
         }
 
-        if interaction.isActive {
-            let value = prompt + interaction.text
+        if isActive {
+            let value = prompt + input.text
 
             frame.write(
                 TerminalDisplay.clipped(
@@ -84,8 +118,13 @@ public struct TerminalCommandLine:
                 return
             }
 
+            let beforeCursor = String(
+                input.text.prefix(
+                    input.cursorOffset
+                )
+            )
             let cursorColumns = TerminalDisplay.width(
-                of: prompt + interaction.textBeforeCursor
+                of: prompt + beforeCursor
             )
 
             frame.placeCursor(

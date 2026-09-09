@@ -1,4 +1,3 @@
-import Swim
 import Terminal
 
 enum TerminalCommandLineFoundationSmoke {
@@ -10,21 +9,23 @@ enum TerminalCommandLineFoundationSmoke {
         guard commandLine.isActive,
               commandLine.handle(
                 .char("w")
-              ) == .editing,
+              ) == .changed,
+              commandLine.text == "w",
               commandLine.handle(
                 .enter
-              ) == .command(
-                .write
-              ) else {
+              ) == .submitted(
+                "w"
+              ),
+              !commandLine.isActive else {
             throw TerminalTestFailure(
-                probe: "TerminalCommandLine write bridge",
-                expectation: "active :w resolves through Swim",
+                probe: "TerminalCommandLine generic submission",
+                expectation: "active input w then submitted(w)",
                 observed: "unexpected command-line state"
             )
         }
 
         commandLine.setStatus(
-            "\"/tmp/agentic/inputbuffers/example.txt\" written"
+            "written"
         )
 
         var frame = TerminalFrame(
@@ -45,6 +46,22 @@ enum TerminalCommandLineFoundationSmoke {
                 probe: "TerminalCommandLine status rendering",
                 expectation: "rendered status span",
                 observed: "no spans"
+            )
+        }
+
+        commandLine.begin(
+            text: "quit"
+        )
+
+        guard commandLine.handle(
+            .escape
+        ) == .cancelled,
+        !commandLine.isActive,
+        commandLine.text.isEmpty else {
+            throw TerminalTestFailure(
+                probe: "TerminalCommandLine cancellation",
+                expectation: "cancelled inactive empty",
+                observed: "unexpected cancellation state"
             )
         }
     }

@@ -10,11 +10,9 @@ enum TerminalTestCommand: String {
     case listReview = "list-review"
     case navigation
     case settings
-    case textSurface = "text-surface-lab"
     case tuiFoundation = "tui-foundation"
     case frame
     case shell
-    case overlay
     case card
     case structuredContent = "structured-content"
     case stdinTerminal = "stdin-terminal"
@@ -77,9 +75,6 @@ struct TerminalTest {
             case .settings:
                 try TerminalSettingsMenuSmoke.run()
 
-            case .textSurface:
-                try TerminalTextSurfaceLab.run()
-
             case .tuiFoundation:
                 try TerminalTUIFoundationSmoke.run()
 
@@ -88,9 +83,6 @@ struct TerminalTest {
 
             case .shell:
                 try TerminalShellSmoke.run()
-
-            case .overlay:
-                try TerminalOverlaySmoke.run()
 
             case .card:
                 try TerminalInteractiveBlockSmoke.run()
@@ -141,11 +133,9 @@ struct TerminalTest {
                 swift run termtest list-review
                 swift run termtest navigation
                 swift run termtest settings
-                swift run termtest text-surface-lab
                 swift run termtest tui-foundation
                 swift run termtest frame
                 swift run termtest shell
-                swift run termtest overlay
                 swift run termtest structured-content
                 swift run termtest stdin-terminal
                 swift run termtest style-lines
@@ -162,11 +152,9 @@ struct TerminalTest {
                 list-review   Multi-select review list with colored collapsed summary.
                 navigation     Verify shared navigation defaults.
                 settings       Verify reusable settings-menu navigation and rendering.
-                text-surface-lab Interactively exercise compact/expanded modal text editing.
                 tui-foundation Verify reusable TUI state, display, frame, and layout primitives.
                 frame          Inspect persistent dirty-row frame composition interactively.
                 shell          Run the persistent interactive shell composition laboratory.
-                overlay        Inspect centered modal and trailing side-sheet focus capture.
                 card           Inspect the generic interactive attached-block primitive.
                 structured-content Render recursive DSL content with nested formatting.
                 stdin-terminal Reconnect standard input to the controlling terminal.
