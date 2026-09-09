@@ -154,6 +154,58 @@ public struct TerminalScrollableDocument:
         }
     }
 
+    @discardableResult
+    public mutating func scrollUp(
+        by rows: Int = 1
+    ) -> Bool {
+        let previousOffset = viewport.offset
+        isFollowingEnd = false
+        viewport.scrollUp(
+            by: rows
+        )
+
+        return viewport.offset != previousOffset
+    }
+
+    @discardableResult
+    public mutating func scrollDown(
+        by rows: Int = 1
+    ) -> Bool {
+        let previousOffset = viewport.offset
+        viewport.scrollDown(
+            by: rows
+        )
+        isFollowingEnd = viewport.isAtEnd
+
+        return viewport.offset != previousOffset
+    }
+
+    @discardableResult
+    public mutating func pageUp(
+        overlapRows: Int = 1
+    ) -> Bool {
+        let previousOffset = viewport.offset
+        isFollowingEnd = false
+        viewport.pageUp(
+            overlapRows: overlapRows
+        )
+
+        return viewport.offset != previousOffset
+    }
+
+    @discardableResult
+    public mutating func pageDown(
+        overlapRows: Int = 1
+    ) -> Bool {
+        let previousOffset = viewport.offset
+        viewport.pageDown(
+            overlapRows: overlapRows
+        )
+        isFollowingEnd = viewport.isAtEnd
+
+        return viewport.offset != previousOffset
+    }
+
     public mutating func moveToStart() {
         isFollowingEnd = false
         viewport.moveToStart()

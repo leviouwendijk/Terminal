@@ -21,6 +21,7 @@ enum TerminalTUIFoundationSmoke {
     static func run() throws {
         try runViewportProbe()
         try runScrollableDocumentRevealProbe()
+        try TerminalScrollableDocumentNavigationSmoke.run()
         try runTextInputProbe()
         try runDisplayProbe()
         try TerminalStyledTextFoundationSmoke.run()
