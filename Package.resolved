@@ -1,5 +1,5 @@
 {
-  "originHash" : "c1cff2f6ae90ede7af7681fc01630c83a3339cce72d7034c19b71e462ef913de",
+  "originHash" : "87eb929d4e9f79623ba372aced815696d5af660e384ff4e1021d83621191fae8",
   "pins" : [
     {
       "identity" : "ansi",
@@ -62,15 +62,6 @@
       "state" : {
         "branch" : "master",
         "revision" : "86a939d7bbb3e25808f88fbcedcee4069a5a5ae1"
-      }
-    },
-    {
-      "identity" : "swim",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/leviouwendijk/Swim",
-      "state" : {
-        "branch" : "master",
-        "revision" : "0dc46fe1b1d7579e2a883ae45383061cf76d64ee"
       }
     },
     {
