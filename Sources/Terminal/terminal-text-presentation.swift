@@ -8,82 +8,33 @@ public enum TerminalLineNumberMode:
     case hybrid
 }
 
-public struct TerminalIndentationGuideOptions:
+public struct TerminalLineNumberPresentation:
     Sendable,
     Hashable
 {
-    public var isEnabled: Bool
-    public var width: Int
-    public var glyph: String
+    public var mode: TerminalLineNumberMode
     public var style: TerminalStyle
+    public var currentStyle: TerminalStyle
 
     public init(
-        isEnabled: Bool = false,
-        width: Int = 4,
-        glyph: String = "│",
-        style: TerminalStyle = .dim
+        mode: TerminalLineNumberMode = .hidden,
+        style: TerminalStyle = .dim,
+        currentStyle: TerminalStyle = .bold
     ) {
-        self.isEnabled = isEnabled
-        self.width = max(
-            1,
-            width
-        )
-        self.glyph = glyph.isEmpty
-            ? "│"
-            : glyph
+        self.mode = mode
         self.style = style
+        self.currentStyle = currentStyle
     }
-}
-
-public struct TerminalTextEditorPresentation:
-    Sendable,
-    Hashable
-{
-    public var lineNumbers: TerminalLineNumberMode
-    public var lineNumberStyle: TerminalStyle
-    public var currentLineNumberStyle: TerminalStyle
-    public var selectionStyle: TerminalStyle
-    public var indentationGuides: TerminalIndentationGuideOptions
-
-    public init(
-        lineNumbers: TerminalLineNumberMode = .hidden,
-        lineNumberStyle: TerminalStyle = .dim,
-        currentLineNumberStyle: TerminalStyle = .bold,
-        selectionStyle: TerminalStyle = TerminalStyle(
-            foreground: .rgb(
-                red: 208,
-                green: 208,
-                blue: 208
-            ),
-            background: .rgb(
-                red: 58,
-                green: 61,
-                blue: 67
-            )
-        ),
-        indentationGuides: TerminalIndentationGuideOptions = .init()
-    ) {
-        self.lineNumbers = lineNumbers
-        self.lineNumberStyle = lineNumberStyle
-        self.currentLineNumberStyle = currentLineNumberStyle
-        self.selectionStyle = selectionStyle
-        self.indentationGuides = indentationGuides
-    }
-
-    public static let plain = TerminalTextEditorPresentation()
 
     public func gutterColumns(
-        lineCount: Int,
         availableColumns: Int
     ) -> Int {
-        guard lineNumbers != .hidden else {
+        guard mode != .hidden else {
             return 0
         }
 
-        let desired = 7
-
         return min(
-            desired,
+            7,
             max(
                 0,
                 availableColumns - 1
@@ -91,7 +42,7 @@ public struct TerminalTextEditorPresentation:
         )
     }
 
-    func lineNumberText(
+    public func text(
         sourceLineNumber: Int,
         currentLineNumber: Int,
         isSourceLineStart: Bool,
@@ -110,7 +61,7 @@ public struct TerminalTextEditorPresentation:
 
         let value: Int
 
-        switch lineNumbers {
+        switch mode {
         case .hidden:
             return String(
                 repeating: " ",
@@ -153,5 +104,41 @@ public struct TerminalTextEditorPresentation:
         )
             + number
             + " "
+    }
+
+    public func style(
+        sourceLineNumber: Int,
+        currentLineNumber: Int
+    ) -> TerminalStyle {
+        sourceLineNumber == currentLineNumber
+            ? currentStyle
+            : style
+    }
+}
+
+public struct TerminalIndentationGuideOptions:
+    Sendable,
+    Hashable
+{
+    public var isEnabled: Bool
+    public var width: Int
+    public var glyph: String
+    public var style: TerminalStyle
+
+    public init(
+        isEnabled: Bool = false,
+        width: Int = 4,
+        glyph: String = "│",
+        style: TerminalStyle = .dim
+    ) {
+        self.isEnabled = isEnabled
+        self.width = max(
+            1,
+            width
+        )
+        self.glyph = glyph.isEmpty
+            ? "│"
+            : glyph
+        self.style = style
     }
 }

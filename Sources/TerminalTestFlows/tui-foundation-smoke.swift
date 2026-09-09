@@ -24,6 +24,7 @@ enum TerminalTUIFoundationSmoke {
         try runTextInputProbe()
         try runDisplayProbe()
         try TerminalStyledTextFoundationSmoke.run()
+        try TerminalTextProjectionFoundationSmoke.run()
         try runBlockWrapProbe()
         try runDifferenceEndOfFileProbe()
         try runFrameProbe()
