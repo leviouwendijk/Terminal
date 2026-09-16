@@ -2,6 +2,7 @@ import Foundation
 import Terminal
 
 enum TerminalTestCommand: String {
+    case foundation
     case keys
     case list
     case menu
@@ -31,12 +32,17 @@ struct TerminalTest {
         )
 
         let command =
-            arguments.first
+            arguments.first(where: {
+                !$0.hasPrefix("-")
+            })
             .flatMap(TerminalTestCommand.init(rawValue:))
-            ?? .help
+            ?? .foundation
 
         do {
             switch command {
+            case .foundation:
+                try TerminalMultiSelectControlSmoke.run()
+
             case .keys:
                 try TerminalInteractiveSmoke.runKeyProbe()
 
@@ -125,6 +131,8 @@ struct TerminalTest {
             termtest
 
             Usage:
+                swift run termtest
+                swift run termtest foundation
                 swift run termtest keys
                 swift run termtest list
                 swift run termtest menu
@@ -144,6 +152,7 @@ struct TerminalTest {
                 swift run termtest help
 
             Commands:
+                foundation    Run non-interactive reusable-control smoke tests.
                 keys          Show decoded keys until Esc, Ctrl-C, or Ctrl-D.
                 list          Open a tiny interactive multi-selection list probe.
                 menu          Open a tiny interactive single-pick menu probe.

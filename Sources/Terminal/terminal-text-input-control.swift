@@ -56,6 +56,17 @@ public struct TerminalTextInputControl:
         }
     }
 
+    @discardableResult
+    public mutating func insert(
+        _ text: String
+    ) -> TerminalTextInputEvent? {
+        input.insert(
+            text
+        )
+            ? .changed
+            : nil
+    }
+
     public mutating func replace(
         with text: String,
         cursorOffset: Int? = nil
