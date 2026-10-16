@@ -8,6 +8,8 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
     public var insert: TerminalStyle
     public var delete: TerminalStyle
     public var separator: TerminalStyle
+    public var insertRow: TerminalStyle?
+    public var deleteRow: TerminalStyle?
 
     public init(
         header: TerminalStyle = .init(.brightBlack),
@@ -16,7 +18,9 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
         equal: TerminalStyle = .dim,
         insert: TerminalStyle = .init(.green),
         delete: TerminalStyle = .init(.red),
-        separator: TerminalStyle = .init(.brightBlack)
+        separator: TerminalStyle = .init(.brightBlack),
+        insertRow: TerminalStyle? = nil,
+        deleteRow: TerminalStyle? = nil
     ) {
         self.header = header
         self.lineNumbers = lineNumbers
@@ -25,21 +29,37 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
         self.insert = insert
         self.delete = delete
         self.separator = separator
+        self.insertRow = insertRow
+        self.deleteRow = deleteRow
     }
 
     public static let standard = TerminalDifferenceStyle()
+
+    public static let filled = TerminalDifferenceStyle(
+        insertRow: TerminalStyle(
+            foreground: .rgb(red: 225, green: 245, blue: 233),
+            background: .rgb(red: 29, green: 73, blue: 49)
+        ),
+        deleteRow: TerminalStyle(
+            foreground: .rgb(red: 250, green: 225, blue: 228),
+            background: .rgb(red: 90, green: 36, blue: 45)
+        )
+    )
 }
 
 public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
     public var base: DifferenceRenderOptions
     public var style: TerminalDifferenceStyle
+    public var columns: Int?
 
     public init(
         base: DifferenceRenderOptions = .unified,
-        style: TerminalDifferenceStyle = .standard
+        style: TerminalDifferenceStyle = .standard,
+        columns: Int? = nil
     ) {
         self.base = base
         self.style = style
+        self.columns = columns
     }
 }
 
@@ -75,7 +95,8 @@ public enum TerminalDifferenceRenderer {
                 layout,
                 options: options.base
             ),
-            style: options.style
+            style: options.style,
+            columns: options.columns
         )
     }
 
@@ -86,7 +107,7 @@ public enum TerminalDifferenceRenderer {
         Swift.print(
             render(
                 difference,
-                options: options
+                options: printOptions(options)
             )
         )
     }
@@ -98,20 +119,33 @@ public enum TerminalDifferenceRenderer {
         Swift.print(
             render(
                 layout,
-                options: options
+                options: printOptions(options)
             )
+        )
+    }
+
+    private static func printOptions(
+        _ options: TerminalDifferenceRenderOptions
+    ) -> TerminalDifferenceRenderOptions {
+        .init(
+            base: options.base,
+            style: options.style,
+            columns: options.columns
+                ?? Terminal.size(for: .standardOutput).columns
         )
     }
 
     private static func render(
         _ plan: DifferenceRenderPlan,
-        style: TerminalDifferenceStyle
+        style: TerminalDifferenceStyle,
+        columns: Int?
     ) -> String {
         plan.lines
             .map {
                 renderLine(
                     $0,
-                    style: style
+                    style: style,
+                    columns: columns
                 )
             }
             .joined(
@@ -121,12 +155,28 @@ public enum TerminalDifferenceRenderer {
 
     private static func renderLine(
         _ line: DifferenceRenderPlan.Line,
-        style: TerminalDifferenceStyle
+        style: TerminalDifferenceStyle,
+        columns: Int?
     ) -> String {
         let spacing = String(
             repeating: " ",
             count: line.componentSpacing
         )
+
+        if let rowStyle = rowStyle(for: line.role, style: style) {
+            let text = line.segments
+                .map(\.text)
+                .joined(separator: spacing)
+
+            let content = columns.map {
+                TerminalDisplay.fitted(
+                    text,
+                    columns: $0
+                )
+            } ?? text
+
+            return rowStyle.apply(content)
+        }
 
         return line.segments
             .map {
@@ -142,6 +192,20 @@ public enum TerminalDifferenceRenderer {
             .joined(
                 separator: spacing
             )
+    }
+
+    private static func rowStyle(
+        for role: DifferenceLayout.Role,
+        style: TerminalDifferenceStyle
+    ) -> TerminalStyle? {
+        switch role {
+        case .insert:
+            return style.insertRow
+        case .delete:
+            return style.deleteRow
+        default:
+            return nil
+        }
     }
 
     private static func segmentStyle(

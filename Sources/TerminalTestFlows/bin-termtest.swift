@@ -43,6 +43,7 @@ struct TerminalTest {
             case .foundation:
                 try TerminalMultiSelectControlSmoke.run()
 
+                try TerminalDifferenceSmoke.run()
             case .keys:
                 try TerminalInteractiveSmoke.runKeyProbe()
 
