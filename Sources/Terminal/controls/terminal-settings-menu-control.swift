@@ -88,6 +88,9 @@ public struct TerminalSettingsMenuControl<
         ID
     >
 
+    // View-local inspection position; never part of the selected setting.
+    private var detailOffset: Int = 0
+
     public init(
         title: String,
         path: [String] = [],
@@ -142,6 +145,7 @@ public struct TerminalSettingsMenuControl<
         }
 
         self.rows = rows
+        detailOffset = 0
         list.updateItems(
             rows,
             preservingCurrent: preservingCurrent
@@ -152,15 +156,25 @@ public struct TerminalSettingsMenuControl<
     public mutating func select(
         id: ID
     ) -> Bool {
-        list.select(
+        let changed = list.select(
             id: id
         )
+        if changed { detailOffset = 0 }
+        return changed
     }
 
     public mutating func handle(
         _ key: TerminalKey
     ) -> TerminalSettingsMenuEvent<ID>? {
         switch key {
+        case .char("J"):
+            detailOffset += 1
+            return nil
+
+        case .char("K"):
+            detailOffset = max(0, detailOffset - 1)
+            return nil
+
         case .char("q"),
              .char("h"),
              .left,
@@ -197,6 +211,7 @@ public struct TerminalSettingsMenuControl<
 
         switch event {
         case .currentChanged(let id):
+            detailOffset = 0
             return .currentChanged(
                 id
             )
@@ -218,8 +233,8 @@ public struct TerminalSettingsMenuControl<
     ) {
         let overlay = TerminalOverlay(
             placement: .centered(
-                columns: columns,
-                rows: requestedRows
+                columns: min(max(1, columns), max(1, region.columns)),
+                rows: min(max(1, requestedRows), max(1, region.rows))
             ),
             outerInsets: TerminalInsets(
                 vertical: 1,
@@ -343,6 +358,11 @@ private extension TerminalSettingsMenuControl {
         )
 
         guard start < end else {
+            frame.write(
+                theme.disabled.apply("No entries"),
+                in: region,
+                zIndex: .overlay
+            )
             return
         }
 
@@ -379,7 +399,9 @@ private extension TerminalSettingsMenuControl {
         let disclosure = disclosureSuffix(
             item.accessory
         )
-        let value = item.value ?? ""
+        let rawValue = item.value ?? ""
+        let value = TerminalDisplay.width(of: rawValue) + 14 <= width
+            ? rawValue : ""
         let fixedWidth = TerminalDisplay.width(
             of: cursor + accessory + disclosure
         )
@@ -476,7 +498,9 @@ private extension TerminalSettingsMenuControl {
 
         frame.write(
             Array(
-                lines.prefix(
+                lines.dropFirst(
+                    min(detailOffset, max(0, lines.count - region.rows))
+                ).prefix(
                     region.rows
                 )
             ),

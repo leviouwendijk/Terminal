@@ -143,6 +143,26 @@ enum TerminalSettingsMenuSmoke {
             throw Failure.presentation
         }
 
+        // A long description must remain inspectable, and an empty result
+        // list must render explicit feedback instead of a blank region.
+        control.update(
+            rows: [.init(id: .model, title: "Long description",
+                detail: .init(title: "Long description", body:
+                    (0..<50).map { "detail line \($0)" }.joined(separator: "\n")))],
+            preservingCurrent: false
+        )
+        for _ in 0..<14 { _ = control.handle(.char("J")) }
+        var longFrame = TerminalFrame(rows: 28, columns: 100)
+        control.render(into: &longFrame, in: .init(rows: 28, columns: 100))
+        let scrolled = stripANSI(longFrame.resolved().spans.map(\.content).joined(separator: "\n"))
+        guard scrolled.contains("detail line 14") else { throw Failure.presentation }
+
+        control.update(rows: [], preservingCurrent: false)
+        var emptyFrame = TerminalFrame(rows: 28, columns: 100)
+        control.render(into: &emptyFrame, in: .init(rows: 28, columns: 100))
+        let empty = stripANSI(emptyFrame.resolved().spans.map(\.content).joined(separator: "\n"))
+        guard empty.contains("No entries") else { throw Failure.presentation }
+
         print(
             "terminal settings menu smoke passed"
         )

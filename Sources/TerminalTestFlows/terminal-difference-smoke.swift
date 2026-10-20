@@ -63,9 +63,6 @@ enum TerminalDifferenceSmoke {
         guard filled[1] == insertion.apply(rowText(1)) else {
             throw Failure.incorrectInsertionFill
         }
-        guard filled[2] == standard[2] else {
-            throw Failure.changedEqualRow
-        }
         let columns = 36
         let sizedFilled = TerminalDifferenceRenderer.render(
             layout,
@@ -102,6 +99,9 @@ enum TerminalDifferenceSmoke {
                 TerminalDisplay.fitted(rowText(0), columns: 5)
               ) else {
             throw Failure.incorrectClippedRow
+        }
+        guard filled[2] == standard[2] else {
+            throw Failure.changedEqualRow
         }
         print("terminal difference preset smoke passed")
     }
