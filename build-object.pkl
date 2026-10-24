@@ -1,0 +1,20 @@
+uuid = "DB44D66A-0977-4161-AB2B-50D233C4CFE2"
+name = "Terminal"
+types { "library" }
+versions {
+    release {
+        major = 0
+        minor = 1
+        patch = 0
+    }
+}
+compile {
+    use = false
+    arguments { }
+}
+tests {
+    primary = "termtest"
+}
+details = ""
+author = "levi"
+update = "https://raw.githubusercontent.com/leviouwendijk/Terminal/master/build-object.pkl"

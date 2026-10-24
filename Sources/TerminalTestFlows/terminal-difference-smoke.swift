@@ -7,6 +7,7 @@ enum TerminalDifferenceSmoke {
         case missingRowStyle
         case incorrectRowCount
         case changedStandardColors
+        case changedDefaultStyle
         case incorrectDeletionFill
         case incorrectInsertionFill
         case changedEqualRow
@@ -37,6 +38,11 @@ enum TerminalDifferenceSmoke {
             options: .init(base: base, style: .filled)
         ).components(separatedBy: "\n")
 
+        let rendered_default = TerminalDifferenceRenderer.render(
+            layout,
+            options: .init(base: base)
+        ).components(separatedBy: "\n")
+
         guard plan.lines.count == 3,
               standard.count == 3,
               filled.count == 3 else {
@@ -47,6 +53,9 @@ enum TerminalDifferenceSmoke {
               !standard[0].contains("\u{001B}[48;2;"),
               !standard[1].contains("\u{001B}[48;2;") else {
             throw Failure.changedStandardColors
+        }
+        guard rendered_default == filled else {
+            throw Failure.changedDefaultStyle
         }
         guard let deletion = TerminalDifferenceStyle.filled.deleteRow,
               let insertion = TerminalDifferenceStyle.filled.insertRow else {

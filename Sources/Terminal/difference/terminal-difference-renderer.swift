@@ -63,7 +63,7 @@ public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
 
     public init(
         base: DifferenceRenderOptions = .unified,
-        style: TerminalDifferenceStyle = .standard,
+        style: TerminalDifferenceStyle = .filled,
         columns: Int? = nil
     ) {
         self.base = base
@@ -223,8 +223,9 @@ public enum TerminalDifferenceRenderer {
         style: TerminalDifferenceStyle
     ) -> TerminalStyle {
         switch role {
-        case .headerOld,
-             .headerNew:
+        case 
+            .headerOld,
+            .headerNew:
             return style.header
 
         case .separator:
@@ -232,29 +233,32 @@ public enum TerminalDifferenceRenderer {
 
         case .endOfFile:
             switch segment.component {
-            case .lineNumbers:
+                case .lineNumbers:
                 return style.lineNumbers
 
-            case .border:
+                case .border:
                 return style.border
 
-            case .marker,
-                 .text:
+                case 
+                    .marker,
+                    .text:
                 return style.separator
             }
 
-        case .equal,
-             .insert,
-             .delete:
+            case 
+                .equal,
+                .insert,
+                .delete:
             switch segment.component {
-            case .lineNumbers:
-                return style.lineNumbers
+                case .lineNumbers:
+                    return style.lineNumbers
 
-            case .border:
-                return style.border
+                case .border:
+                    return style.border
 
-            case .marker,
-                 .text:
+                case 
+                    .marker,
+                    .text:
                 return contentStyle(
                     for: role,
                     style: style
@@ -268,21 +272,23 @@ public enum TerminalDifferenceRenderer {
         style: TerminalDifferenceStyle
     ) -> TerminalStyle {
         switch role {
-        case .equal:
+            case .equal:
             return style.equal
 
-        case .insert:
+            case .insert:
             return style.insert
 
-        case .delete:
+            case .delete:
             return style.delete
 
-        case .headerOld,
-             .headerNew:
+            case 
+                .headerOld,
+                .headerNew:
             return style.header
 
-        case .separator,
-             .endOfFile:
+            case 
+                .separator,
+                .endOfFile:
             return style.separator
         }
     }
