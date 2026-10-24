@@ -7,6 +7,9 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
     public var equal: TerminalStyle
     public var insert: TerminalStyle
     public var delete: TerminalStyle
+    public var modified: TerminalStyle
+    public var moved: TerminalStyle
+    public var moved_modified: TerminalStyle
     public var separator: TerminalStyle
     public var insertRow: TerminalStyle?
     public var deleteRow: TerminalStyle?
@@ -18,6 +21,9 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
         equal: TerminalStyle = .dim,
         insert: TerminalStyle = .init(.green),
         delete: TerminalStyle = .init(.red),
+        modified: TerminalStyle = .init(.yellow),
+        moved: TerminalStyle = .init(.cyan),
+        moved_modified: TerminalStyle = .init(.magenta),
         separator: TerminalStyle = .init(.brightBlack),
         insertRow: TerminalStyle? = nil,
         deleteRow: TerminalStyle? = nil
@@ -28,6 +34,9 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
         self.equal = equal
         self.insert = insert
         self.delete = delete
+        self.modified = modified
+        self.moved = moved
+        self.moved_modified = moved_modified
         self.separator = separator
         self.insertRow = insertRow
         self.deleteRow = deleteRow

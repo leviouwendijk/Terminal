@@ -44,6 +44,7 @@ struct TerminalTest {
                 try TerminalMultiSelectControlSmoke.run()
 
                 try TerminalDifferenceSmoke.run()
+                try TerminalStructuredDifferenceSmoke.run()
             case .keys:
                 try TerminalInteractiveSmoke.runKeyProbe()
 
