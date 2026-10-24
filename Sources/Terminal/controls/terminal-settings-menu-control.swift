@@ -6,6 +6,8 @@ public enum TerminalSettingsRowAccessory:
     case disclosure
     case radio(selected: Bool)
     case checkbox(selected: Bool)
+    /// Two independent, generic on/off markers. The caller supplies their meaning.
+    case indicators(first: Bool, second: Bool)
 }
 
 public struct TerminalSettingsDetail:
@@ -82,6 +84,7 @@ public struct TerminalSettingsMenuControl<
     public private(set) var path: [String]
     public private(set) var rows: [TerminalSettingsRow<ID>]
     public var instructions: String
+    public var rowLegend: String?
 
     private var list: TerminalListControl<
         TerminalSettingsRow<ID>,
@@ -96,12 +99,14 @@ public struct TerminalSettingsMenuControl<
         path: [String] = [],
         rows: [TerminalSettingsRow<ID>],
         currentID: ID? = nil,
-        instructions: String = "j/k move  enter select  space toggle  q back"
+        instructions: String = "j/k move  enter select  space toggle  q back",
+        rowLegend: String? = nil
     ) {
         self.title = title
         self.path = path
         self.rows = rows
         self.instructions = instructions
+        self.rowLegend = rowLegend
         self.list = TerminalListControl(
             items: rows,
             currentID: currentID,
@@ -130,7 +135,8 @@ public struct TerminalSettingsMenuControl<
         path: [String]? = nil,
         rows: [TerminalSettingsRow<ID>],
         preservingCurrent: Bool = true,
-        instructions: String? = nil
+        instructions: String? = nil,
+        rowLegend: String? = nil
     ) {
         if let title {
             self.title = title
@@ -145,6 +151,7 @@ public struct TerminalSettingsMenuControl<
         }
 
         self.rows = rows
+        self.rowLegend = rowLegend
         detailOffset = 0
         list.updateItems(
             rows,
@@ -334,11 +341,35 @@ private extension TerminalSettingsMenuControl {
             return
         }
 
+        var listRegion = region
+        if let rowLegend, !rowLegend.isEmpty {
+            frame.write(
+                theme.caption.apply(
+                    TerminalDisplay.clipped(rowLegend, columns: region.columns)
+                ),
+                in: TerminalRegion(
+                    top: region.top,
+                    leading: region.leading,
+                    rows: 1,
+                    columns: region.columns
+                ),
+                zIndex: .overlay
+            )
+            listRegion = TerminalRegion(
+                top: region.top + 1,
+                leading: region.leading,
+                rows: max(0, region.rows - 1),
+                columns: region.columns
+            )
+        }
+
+        guard listRegion.rows > 0 else { return }
+
         let rows = list.rows()
         let currentIndex = list.currentIndex ?? 0
         let visibleCount = max(
             1,
-            region.rows
+            listRegion.rows
         )
         let maximumStart = max(
             0,
@@ -360,7 +391,7 @@ private extension TerminalSettingsMenuControl {
         guard start < end else {
             frame.write(
                 theme.disabled.apply("No entries"),
-                in: region,
+                in: listRegion,
                 zIndex: .overlay
             )
             return
@@ -369,14 +400,14 @@ private extension TerminalSettingsMenuControl {
         let rendered = rows[start..<end].map { row in
             renderRow(
                 row,
-                width: region.columns,
+                width: listRegion.columns,
                 theme: theme
             )
         }
 
         frame.write(
             Array(rendered),
-            in: region,
+            in: listRegion,
             zIndex: .overlay
         )
     }
@@ -429,9 +460,8 @@ private extension TerminalSettingsMenuControl {
         }
 
         var rendered = cursor
-            + style.apply(
-                accessory + title
-            )
+            + styledAccessory(item.accessory, style: style, theme: theme)
+            + style.apply(title)
 
         if !value.isEmpty {
             rendered += "  "
@@ -526,7 +556,26 @@ private extension TerminalSettingsMenuControl {
             return selected
                 ? "[x] "
                 : "[ ] "
+
+        case .indicators(let first, let second):
+            return "[\(first ? "●" : "○") \(second ? "●" : "○")] "
         }
+    }
+
+    func styledAccessory(
+        _ accessory: TerminalSettingsRowAccessory,
+        style: TerminalStyle,
+        theme: TerminalTheme
+    ) -> String {
+        guard case .indicators(let first, let second) = accessory else {
+            return style.apply(accessoryPrefix(accessory))
+        }
+
+        return theme.disabled.apply("[")
+            + (first ? theme.success : theme.disabled).apply(first ? "●" : "○")
+            + theme.disabled.apply(" ")
+            + (second ? theme.success : theme.disabled).apply(second ? "●" : "○")
+            + theme.disabled.apply("] ")
     }
 
     func disclosureSuffix(

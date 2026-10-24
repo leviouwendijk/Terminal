@@ -163,6 +163,32 @@ enum TerminalSettingsMenuSmoke {
         let empty = stripANSI(emptyFrame.resolved().spans.map(\.content).joined(separator: "\n"))
         guard empty.contains("No entries") else { throw Failure.presentation }
 
+        // Generic two-flag accessories must render all combinations, not just
+        // collapse to the first checkbox. Legacy checkbox stays unchanged.
+        control.update(
+            rows: [
+                .init(id: .model, title: "None",
+                    accessory: .indicators(first: false, second: false)),
+                .init(id: .exposure, title: "First",
+                    accessory: .indicators(first: true, second: false)),
+                .init(id: .skills, title: "Both",
+                    accessory: .indicators(first: true, second: true)),
+                .init(id: .discovery, title: "Legacy",
+                    accessory: .checkbox(selected: true)),
+            ],
+            preservingCurrent: false,
+            rowLegend: "   A V  ● enabled · ○ disabled"
+        )
+        var markersFrame = TerminalFrame(rows: 28, columns: 100)
+        control.render(into: &markersFrame, in: .init(rows: 28, columns: 100), theme: .plain)
+        let markers = stripANSI(markersFrame.resolved().spans.map(\.content).joined())
+        guard markers.contains("A V"),
+              markers.contains("[○ ○]"),
+              markers.contains("[● ○]"),
+              markers.contains("[● ●]"),
+              markers.contains("[x]")
+        else { throw Failure.presentation }
+
         print(
             "terminal settings menu smoke passed"
         )
