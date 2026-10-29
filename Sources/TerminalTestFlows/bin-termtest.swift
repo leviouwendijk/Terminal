@@ -26,7 +26,7 @@ enum TerminalTestCommand: String {
 
 @main
 struct TerminalTest {
-    static func main() {
+    static func main() async {
         let arguments = Array(
             CommandLine.arguments.dropFirst()
         )
@@ -41,6 +41,7 @@ struct TerminalTest {
         do {
             switch command {
             case .foundation:
+                try await TerminalProgressSmoke.run()
                 try TerminalMultiSelectControlSmoke.run()
 
                 try TerminalDifferenceSmoke.run()
