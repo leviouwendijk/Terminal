@@ -17,11 +17,19 @@ let package = Package(
             name: "TerminalStructuredContent",
             targets: ["TerminalStructuredContent"]
         ),
+        .library(
+            name: "TerminalReporting",
+            targets: ["TerminalReporting"]
+        ),
         .executable(
             name: "termtest",
             targets: [
                 "TerminalTestFlows"
             ]
+        ),
+        .executable(
+            name: "t_terminal_reporting",
+            targets: ["TerminalReportingTesting"]
         ),
     ],
     dependencies: [
@@ -29,6 +37,8 @@ let package = Package(
         .package(url: "https://github.com/leviouwendijk/Difference", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Strings", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/DSL", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/Reporting.git", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/Search.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Clipboard", branch: "master"),
     ],
     targets: [
@@ -49,6 +59,25 @@ let package = Package(
                     name: "DSL",
                     package: "DSL"
                 ),
+            ]
+        ),
+        .target(
+            name: "TerminalReporting",
+            dependencies: [
+                "Terminal",
+                "TerminalStructuredContent",
+                .product(name: "Reporting", package: "Reporting"),
+                .product(name: "Search", package: "Search"),
+            ]
+        ),
+        .executableTarget(
+            name: "TerminalReportingTesting",
+            dependencies: [
+                "Terminal",
+                "TerminalReporting",
+                .product(name: "Reporting", package: "Reporting"),
+                .product(name: "Search", package: "Search"),
+                .product(name: "DSL", package: "DSL"),
             ]
         ),
         .executableTarget(
