@@ -1,5 +1,6 @@
 import DSL
 import Foundation
+import Math
 import Reporting
 import Search
 import Terminal
@@ -40,14 +41,47 @@ struct TerminalReportingSmoke {
         try expect(wide.contains("Monthly totals"), "Title")
         try expect(wide.contains("Deterministic overview"), "DSL narrative")
         try expect(wide.contains("Jan") && wide.contains("-5"), "Table and signed numerics")
-        try expect(wide.contains("#") && wide.contains("<"), "Positive and negative bar marks")
+        try expect(wide.contains("█") && wide.contains("▇"), "Positive and negative Unicode bars")
         try expect(wide.contains("▁") && wide.contains("█"), "Ordered line sparkline")
-        try expect(wide.contains("Mar: —"), "Missing chart point is not zero")
+        try expect(wide.contains("Mar") && wide.contains("—"), "Missing chart point is not zero")
         try expect(document.datasets[0].rows[0].sources[0].identifier == "1", "Original provenance remains")
         for width in [8, 13, 27, 70] {
             let rows = renderer.rows(document, columns: width)
             try expect(rows.allSatisfy { TerminalDisplay.width(of: $0) <= width }, "Width \(width)")
         }
+        let bodyOnly = renderer.rows(document, columns: 70, includeTitle: false)
+        try expect(!bodyOnly.contains("Monthly totals"), "Caller can own the title")
+        try expect(bodyOnly.contains("Values"), "Removing title preserves blocks")
+        let zeroDataset = try ReportDataset(
+            id: "zero",
+            columns: [.init("label", kind: .text), .init("amount", kind: .decimal)],
+            rows: [
+                .init(values: [.text("A"), .decimal(0)]),
+                .init(values: [.text("B"), .decimal(0)]),
+            ],
+            coverage: .complete
+        )
+        let zeroDocument = try ReportDocument(
+            title: "Zero", datasets: [zeroDataset],
+            blocks: [.chart(.init(dataset: "zero", kind: .bar, x: "label", y: "amount")),
+                     .chart(.init(dataset: "zero", kind: .line, x: "label", y: "amount"))]
+        )
+        let zeroRows = renderer.rows(zeroDocument, columns: 45)
+        try expect(zeroRows.contains(where: { $0.contains("│") }), "All-zero bar has baseline")
+        try expect(zeroRows.contains(where: { $0.contains("▄▄") }), "Constant line has defined flat glyph")
+        let exactDataset = try ReportDataset(
+            id: "exact", columns: [.init("label", kind: .text), .init("value", kind: .decimal)],
+            rows: [
+                .init(values: [.text("Precise"), .decimal(try DecimalArithmetic.parse("1000000000000000000.125"))])
+            ], coverage: .complete
+        )
+        let exactDocument = try ReportDocument(
+            title: "Exact", datasets: [exactDataset],
+            blocks: [.chart(.init(dataset: "exact", kind: .bar, x: "label", y: "value"))]
+        )
+        try expect(renderer.render(exactDocument, columns: 90).contains("1000000000000000000.125"),
+                   "Chart prints exact decimal, not Double")
+
         let partial = try ReportDataset(
             id: "partial", columns: [.init("amount", kind: .integer)],
             rows: [.init(values: [.integer(3)])],

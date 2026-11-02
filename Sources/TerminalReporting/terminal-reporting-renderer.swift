@@ -1,4 +1,5 @@
 import Foundation
+import Math
 import Reporting
 import Search
 import Terminal
@@ -13,11 +14,11 @@ public enum TerminalReporting {
             self.narrative = narrative
         }
 
-        public func rows(_ document: ReportDocument, columns: Int) -> [String] {
+        public func rows(_ document: ReportDocument, columns: Int, includeTitle: Bool = true) -> [String] {
             let width = max(1, columns)
             var datasets: [String: ReportDataset] = [:]
             for dataset in document.datasets { datasets[dataset.id] = dataset }
-            var result = textRows(document.title, width: width)
+            var result = includeTitle ? textRows(document.title, width: width) : []
 
             for block in document.blocks {
                 let section: [String]
@@ -72,9 +73,16 @@ public enum TerminalReporting {
             guard required <= width else {
                 return output + verticalTable(names: names, values: values, width: width)
             }
+            let numerical = indices.map { index in
+                [.integer, .decimal].contains(dataset.columns[index].kind)
+            }
             func row(_ cells: [String]) -> String {
-                zip(cells, sizes).map { cell, size in
-                    TerminalDisplay.fitted(cell, columns: size)
+                cells.enumerated().map { index, cell in
+                    let padding = String(
+                        repeating: " ",
+                        count: max(0, sizes[index] - TerminalDisplay.width(of: cell))
+                    )
+                    return numerical[index] ? padding + cell : cell + padding
                 }.joined(separator: String(repeating: " ", count: gap))
             }
             output.append(row(names))
@@ -119,48 +127,70 @@ public enum TerminalReporting {
             return output
         }
 
+        /// Preserve exact decimal values; only the terminal's discrete cell positions are rounded.
         private func barRows(labels: [String], numbers: [Decimal?], width: Int) -> [String] {
-            let magnitudes = numbers.compactMap { amount -> Double? in
-                guard let amount else { return nil }
-                let value = abs(NSDecimalNumber(decimal: amount).doubleValue)
-                return value.isFinite ? value : nil
+            let present = numbers.compactMap { $0 }
+            let lower = min(.zero, present.min() ?? .zero)
+            let upper = max(.zero, present.max() ?? .zero)
+            let values = numbers.map { display($0.map { .decimal($0) }) }
+            let labelWidth = min(labels.map { TerminalDisplay.width(of: clean($0)) }.max() ?? 0,
+                                 max(8, width / 4))
+            let valueWidth = values.map { TerminalDisplay.width(of: $0) }.max() ?? 0
+            let plotWidth = min(40, width - labelWidth - valueWidth - 4)
+            guard plotWidth >= 4 else {
+                return zip(labels, values).flatMap { label, value in
+                    textRows("\(label): \(value)", width: width)
+                }
             }
-            let maximum = magnitudes.max() ?? 0
-            var result: [String] = []
-            for (label, amount) in zip(labels, numbers) {
-                result += textRows("\(label): \(display(amount.map { .decimal($0) }))", width: width)
-                guard let amount, maximum > 0, width >= 3 else { continue }
-                let value = abs(NSDecimalNumber(decimal: amount).doubleValue)
-                guard value.isFinite else { continue }
-                let count = min(width - 2, max(0, Int((value / maximum * Double(width - 2)).rounded())))
-                let glyph = amount < .zero ? "<" : "#"
-                result.append("  " + String(repeating: glyph, count: count))
+            let scale = lower < upper ? try? DecimalLinearScale(lower: lower, upper: upper) : nil
+            let baseline = scale.flatMap { chartColumn(.zero, using: $0, width: plotWidth) } ?? 0
+            var output: [String] = []
+            for (index, label) in labels.enumerated() {
+                let paddedLabel = pad(clean(label), width: labelWidth, alignRight: false)
+                let paddedValue = pad(values[index], width: valueWidth, alignRight: true)
+                var glyphs = Array(repeating: Character(" "), count: plotWidth)
+                if let value = numbers[index], let scale,
+                   let end = chartColumn(value, using: scale, width: plotWidth) {
+                    let first = min(baseline, end)
+                    let last = max(baseline, end)
+                    if first < last {
+                        for position in first..<last where position < plotWidth {
+                            glyphs[position] = value < .zero ? "▇" : "█"
+                        }
+                    }
+                    if baseline < plotWidth { glyphs[baseline] = "│" }
+                } else if numbers[index] != nil, baseline < plotWidth {
+                    glyphs[baseline] = "│" // all-zero series
+                }
+                output.append(paddedLabel + "  " + String(glyphs) + "  " + paddedValue)
             }
-            return result
+            return output
         }
 
-        /// Ordered points are rendered as a sparkline; each exact value remains listed below.
+        /// Convert an exact decimal position to bounded terminal cell geometry.
+        private func chartColumn(_ value: Decimal, using scale: DecimalLinearScale, width: Int) -> Int? {
+            guard let position = try? scale.position(of: value, scale: 16),
+                  let rounded = try? DecimalArithmetic.calculate(
+                    .multiply, lhs: position, rhs: Decimal(width), scale: 0
+                  ) else { return nil }
+            return min(width, max(0, NSDecimalNumber(decimal: rounded).intValue))
+        }
+
+        /// Ordered points are rendered as a sparkline; exact values remain listed below.
         private func lineRows(labels: [String], numbers: [Decimal?], width: Int) -> [String] {
-            let finite: [Double] = numbers.compactMap {
-                guard let value = $0 else { return nil }
-                let number = NSDecimalNumber(decimal: value).doubleValue
-                return number.isFinite ? number : nil
-            }
+            let present = numbers.compactMap { $0 }
+            let low = present.min() ?? .zero
+            let high = present.max() ?? .zero
             var output: [String] = []
             let plotWidth = max(0, width - 2)
-            let low = finite.min() ?? 0
-            let high = finite.max() ?? 0
-            let range = high - low
-            if numbers.count <= plotWidth && !finite.isEmpty
-                && finite.count == numbers.compactMap({ $0 }).count
-                && range.isFinite {
+            if !present.isEmpty, numbers.count <= plotWidth {
                 let symbols: [Character] = Array("▁▂▃▄▅▆▇█")
+                let scale = low < high ? try? DecimalLinearScale(lower: low, upper: high) : nil
                 let points = numbers.map { value -> Character in
                     guard let value else { return " " }
-                    let number = NSDecimalNumber(decimal: value).doubleValue
-                    let scaled = range == 0 ? 3 : (number - low) / range * 7
-                    let position = scaled.isFinite ? max(0, min(7, Int(scaled.rounded()))) : 3
-                    return symbols[position]
+                    guard let scale else { return "▄" }
+                    let position = chartColumn(value, using: scale, width: 7) ?? 3
+                    return symbols[min(7, max(0, position))]
                 }
                 output.append(String(points))
             } else {
@@ -170,6 +200,12 @@ public enum TerminalReporting {
                 output += textRows("\(label): \(display(value.map { .decimal($0) }))", width: width)
             }
             return output
+        }
+
+        private func pad(_ value: String, width: Int, alignRight: Bool) -> String {
+            let clipped = TerminalDisplay.clipped(value, columns: max(1, width))
+            let padding = String(repeating: " ", count: max(0, width - TerminalDisplay.width(of: clipped)))
+            return alignRight ? padding + clipped : clipped + padding
         }
 
         private func coverageRows(_ coverage: ReportDataset.Coverage, width: Int) -> [String] {

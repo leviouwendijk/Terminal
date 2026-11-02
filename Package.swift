@@ -48,6 +48,7 @@ let package = Package(
         .package(url: "https://github.com/leviouwendijk/Primitives.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Reporting.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Search.git", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/Math.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Clipboard", branch: "master"),
     ],
     targets: [
@@ -84,6 +85,7 @@ let package = Package(
                 "TerminalStructuredContent",
                 .product(name: "Reporting", package: "Reporting"),
                 .product(name: "Search", package: "Search"),
+                .product(name: "Math", package: "Math"),
             ]
         ),
         .executableTarget(
@@ -101,6 +103,7 @@ let package = Package(
                 "TerminalReporting",
                 .product(name: "Reporting", package: "Reporting"),
                 .product(name: "Search", package: "Search"),
+                .product(name: "Math", package: "Math"),
                 .product(name: "DSL", package: "DSL"),
             ]
         ),
