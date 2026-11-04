@@ -23,8 +23,10 @@ public extension TerminalDifferenceRenderer {
                     return change_style.apply(segment.text) + " "
                 case .branch:
                     return options.style.border.apply(segment.text)
-                case .label:
+                case .label, .relocation_from, .relocation_to:
                     return change_style.apply(segment.text)
+                case .relocation_separator:
+                    return options.style.separator.apply(segment.text)
                 }
             }.joined()
         }.joined(separator: "\n")

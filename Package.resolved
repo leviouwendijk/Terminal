@@ -1,5 +1,5 @@
 {
-  "originHash" : "47eda4bb8b87c1408e201fb8a073477a8956cdfbf401ee5e49c5017dfc330d9e",
+  "originHash" : "089affab94596e150974ff01dd443f084ef66119031e30c5f8e50d5563ef93d8",
   "pins" : [
     {
       "identity" : "ansi",
@@ -43,7 +43,7 @@
       "location" : "https://github.com/leviouwendijk/Difference",
       "state" : {
         "branch" : "master",
-        "revision" : "df94b0fb6edef42c9a09d726d2246d5d996cac20"
+        "revision" : "856ff485a42e81af422d2f7f2b3d83feaaaccde4"
       }
     },
     {
@@ -74,6 +74,15 @@
       }
     },
     {
+      "identity" : "lexing",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/leviouwendijk/Lexing.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "9d9e38a29a365f82869585850e79f616b3b4cda9"
+      }
+    },
+    {
       "identity" : "matching",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/leviouwendijk/Matching.git",
@@ -88,7 +97,7 @@
       "location" : "https://github.com/leviouwendijk/Math.git",
       "state" : {
         "branch" : "master",
-        "revision" : "1323a6904cfad9d630d689614607e1f04ee5889d"
+        "revision" : "7aaa3787dabf871c5df723fd63bf96941bd9b768"
       }
     },
     {
@@ -97,7 +106,7 @@
       "location" : "https://github.com/leviouwendijk/Parsing.git",
       "state" : {
         "branch" : "master",
-        "revision" : "cdd48e8533846308b01a9ced4424568bd0ab98bb"
+        "revision" : "e6c4cb5b7b2884dff15f12878fce80aacee3a598"
       }
     },
     {

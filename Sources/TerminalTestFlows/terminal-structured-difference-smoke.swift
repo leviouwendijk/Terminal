@@ -11,6 +11,7 @@ enum TerminalStructuredDifferenceSmoke {
         case textOptions
         case treeOnlyFormatting
         case semanticMutation
+        case relocationPresentation
     }
 
     static func run() throws {
@@ -43,6 +44,58 @@ enum TerminalStructuredDifferenceSmoke {
               colored[4].contains("\u{001B}[36m"),
               colored[5].contains("\u{001B}[35m") else {
             throw Failure.changeStyles
+        }
+
+        let relocationLayout = TreeDifferenceLayout(lines: [
+            .init(
+                depth: 0,
+                is_last_child: false,
+                ancestor_last: [],
+                change: .moved,
+                label: "moved.swift",
+                id: "relocated",
+                relocation: .init(
+                    from: "A/moved.swift",
+                    to: "B/moved.swift"
+                )
+            ),
+            .init(
+                depth: 0,
+                is_last_child: true,
+                ancestor_last: [],
+                change: .moved_modified,
+                label: "changed.swift",
+                id: "relocated-modified",
+                relocation: .init(
+                    from: "A/changed.swift",
+                    to: "B/changed.swift"
+                )
+            ),
+        ])
+        let relocationPlain = TerminalDifferenceRenderer.render(
+            relocationLayout,
+            options: plain_options
+        )
+        let canonicalRelocation = TreeDifferenceRenderer.render(
+            TreeDifferenceRenderPlan.make(relocationLayout)
+        )
+        guard relocationPlain == canonicalRelocation,
+              relocationPlain.contains("A/moved.swift -> B/moved.swift"),
+              relocationPlain.contains("A/changed.swift -> B/changed.swift") else {
+            throw Failure.relocationPresentation
+        }
+
+        let relocationColored = TerminalDifferenceRenderer.render(
+            relocationLayout
+        ).components(separatedBy: "\n")
+        guard relocationColored.count == 2,
+              relocationColored[0].contains("\u{001B}[36mA/moved.swift"),
+              relocationColored[0].contains("\u{001B}[90m -> "),
+              relocationColored[0].contains("\u{001B}[36mB/moved.swift"),
+              relocationColored[1].contains("\u{001B}[35mA/changed.swift"),
+              relocationColored[1].contains("\u{001B}[90m -> "),
+              relocationColored[1].contains("\u{001B}[35mB/changed.swift") else {
+            throw Failure.relocationPresentation
         }
 
         // The node does not change structurally: content alone must mark it modified.
