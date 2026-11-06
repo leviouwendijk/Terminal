@@ -12,6 +12,7 @@ enum TerminalStructuredDifferenceSmoke {
         case treeOnlyFormatting
         case semanticMutation
         case relocationPresentation
+        case movementReasons
     }
 
     static func run() throws {
@@ -96,6 +97,43 @@ enum TerminalStructuredDifferenceSmoke {
               relocationColored[1].contains("\u{001B}[90m -> "),
               relocationColored[1].contains("\u{001B}[35mB/changed.swift") else {
             throw Failure.relocationPresentation
+        }
+
+        let movement_layout = TreeDifferenceLayout(lines: [
+            .init(
+                depth: 0, is_last_child: false, ancestor_last: [],
+                change: .moved, label: "execute()", id: "execute",
+                movement_reasons: [.reordered]
+            ),
+            .init(
+                depth: 0, is_last_child: true, ancestor_last: [],
+                change: .moved_modified, label: "persist()", id: "persist",
+                movement_reasons: [.relocated, .reparented]
+            ),
+        ])
+        let annotated = TreeDifferenceRenderer.render(
+            TreeDifferenceRenderPlan.make(movement_layout, show_movement_reasons: true)
+        )
+        let unannotated = TreeDifferenceRenderer.render(
+            TreeDifferenceRenderPlan.make(movement_layout)
+        )
+        guard annotated == "> execute()  [reordered]\n* persist()  [relocated, reparented]",
+              unannotated == "> execute()\n* persist()",
+              TerminalDifferenceRenderer.render(movement_layout, options: plain_options) == annotated,
+              TerminalDifferenceRenderer.render(
+                  movement_layout,
+                  options: .init(style: plain_style, show_movement_reasons: false)
+              ) == unannotated else {
+            throw Failure.movementReasons
+        }
+        let movement_colored = TerminalDifferenceRenderer.render(movement_layout)
+            .components(separatedBy: "\n")
+        guard movement_colored.count == 2,
+              movement_colored[0].contains("\u{001B}[36mreordered"),
+              movement_colored[0].contains("\u{001B}[90m  ["),
+              movement_colored[1].contains("\u{001B}[35mrelocated, reparented"),
+              movement_colored[1].contains("\u{001B}[90m]") else {
+            throw Failure.movementReasons
         }
 
         // The node does not change structurally: content alone must mark it modified.

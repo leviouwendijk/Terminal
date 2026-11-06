@@ -14,7 +14,10 @@ public extension TerminalDifferenceRenderer {
         _ layout: TreeDifferenceLayout,
         options: TerminalDifferenceRenderOptions = .init()
     ) -> String {
-        let plan = TreeDifferenceRenderPlan.make(layout)
+        let plan = TreeDifferenceRenderPlan.make(
+            layout,
+            show_movement_reasons: options.show_movement_reasons
+        )
         return plan.lines.map { line in
             let change_style = treeStyle(for: line.change, style: options.style)
             return line.segments.map { segment in
@@ -23,9 +26,9 @@ public extension TerminalDifferenceRenderer {
                     return change_style.apply(segment.text) + " "
                 case .branch:
                     return options.style.border.apply(segment.text)
-                case .label, .relocation_from, .relocation_to:
+                case .label, .relocation_from, .relocation_to, .movement_reason:
                     return change_style.apply(segment.text)
-                case .relocation_separator:
+                case .relocation_separator, .movement_delimiter:
                     return options.style.separator.apply(segment.text)
                 }
             }.joined()

@@ -60,15 +60,18 @@ public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
     public var base: DifferenceRenderOptions
     public var style: TerminalDifferenceStyle
     public var columns: Int?
+    public var show_movement_reasons: Bool
 
     public init(
         base: DifferenceRenderOptions = .unified,
         style: TerminalDifferenceStyle = .filled,
-        columns: Int? = nil
+        columns: Int? = nil,
+        show_movement_reasons: Bool = true
     ) {
         self.base = base
         self.style = style
         self.columns = columns
+        self.show_movement_reasons = show_movement_reasons
     }
 }
 
@@ -140,7 +143,8 @@ public enum TerminalDifferenceRenderer {
             base: options.base,
             style: options.style,
             columns: options.columns
-                ?? Terminal.size(for: .standardOutput).columns
+                ?? Terminal.size(for: .standardOutput).columns,
+            show_movement_reasons: options.show_movement_reasons
         )
     }
 
