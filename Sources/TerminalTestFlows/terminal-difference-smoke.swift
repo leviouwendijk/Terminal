@@ -112,6 +112,26 @@ enum TerminalDifferenceSmoke {
         guard filled[2] == standard[2] else {
             throw Failure.changedEqualRow
         }
+        let barOptions = DifferenceRenderOptions(
+            showHeader: false,
+            showUnchangedLines: true,
+            lineComponents: [.bar, .lineNumbers, .marker, .text],
+            changeBar: "┃"
+        )
+        let barPlan = DifferenceRenderPlan.make(layout, options: barOptions)
+        let barRendered = TerminalDifferenceRenderer.render(
+            layout, options: .init(base: barOptions, style: .filled)
+        )
+        guard barPlan.lines[0].segments.first?.component == .bar,
+              barRendered.contains("┃") else {
+            throw Failure.incorrectRowCount
+        }
+        let finalNewline = TextDiffer.diff(old: "a", new: "a\n")
+        let patch = try finalNewline.unified(context: 0)
+        guard patch.contains("@@ -1,1 +1,1 @@"),
+              patch.contains("\\ No newline at end of file") else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }

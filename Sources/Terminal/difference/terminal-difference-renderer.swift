@@ -11,6 +11,8 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
     public var moved: TerminalStyle
     public var moved_modified: TerminalStyle
     public var separator: TerminalStyle
+    public var insertBar: TerminalStyle
+    public var deleteBar: TerminalStyle
     public var insertRow: TerminalStyle?
     public var deleteRow: TerminalStyle?
 
@@ -25,6 +27,8 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
         moved: TerminalStyle = .init(.cyan),
         moved_modified: TerminalStyle = .init(.magenta),
         separator: TerminalStyle = .init(.brightBlack),
+        insertBar: TerminalStyle = .init(.brightGreen),
+        deleteBar: TerminalStyle = .init(.brightRed),
         insertRow: TerminalStyle? = nil,
         deleteRow: TerminalStyle? = nil
     ) {
@@ -38,6 +42,8 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
         self.moved = moved
         self.moved_modified = moved_modified
         self.separator = separator
+        self.insertBar = insertBar
+        self.deleteBar = deleteBar
         self.insertRow = insertRow
         self.deleteRow = deleteRow
     }
@@ -176,6 +182,18 @@ public enum TerminalDifferenceRenderer {
             count: line.componentSpacing
         )
 
+        if let rowStyle = rowStyle(for: line.role, style: style),
+           columns == nil,
+           line.segments.contains(where: { $0.component == .bar }) {
+            return line.segments.enumerated().map { index, segment in
+                let effective = rowStyle.merging(
+                    segmentStyle(segment, role: line.role, style: style)
+                )
+                let prefix = index == 0 ? "" : rowStyle.apply(spacing)
+                return prefix + effective.apply(segment.text)
+            }.joined()
+        }
+
         if let rowStyle = rowStyle(for: line.role, style: style) {
             let text = line.segments
                 .map(\.text)
@@ -243,9 +261,9 @@ public enum TerminalDifferenceRenderer {
                 case .border:
                 return style.border
 
-                case 
-                    .marker,
-                    .text:
+                case .bar,
+                     .marker,
+                     .text:
                 return style.separator
             }
 
@@ -254,6 +272,13 @@ public enum TerminalDifferenceRenderer {
                 .insert,
                 .delete:
             switch segment.component {
+                case .bar:
+                    switch role {
+                    case .insert: return style.insertBar
+                    case .delete: return style.deleteBar
+                    default: return style.border
+                    }
+
                 case .lineNumbers:
                     return style.lineNumbers
 
