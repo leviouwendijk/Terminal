@@ -1,4 +1,5 @@
 import Difference
+import Primitives
 import Tokens
 
 /// Physical terminal cells are measured before applying ANSI styles.
@@ -29,11 +30,22 @@ enum TerminalDifferenceCell {
         let filler: Line
     }
 
+    private enum BreakKind {
+        case none
+        case identifier
+        case lexical
+    }
+
+    private struct Boundaries {
+        var lexical: Set<Int> = []
+        var identifier: Set<Int> = []
+    }
+
     private struct Unit {
         let text: String
         let columns: Int
         let changed: Bool
-        let breakAfter: Bool
+        let breakAfter: BreakKind
     }
 
     static func make(
@@ -136,7 +148,7 @@ enum TerminalDifferenceCell {
     }
 
     private static func units(
-        _ cell: DifferenceLayout.Cell, tabWidth: Int, breaks: Set<Int> = []
+        _ cell: DifferenceLayout.Cell, tabWidth: Int, breaks: Boundaries = .init()
     ) -> [Unit] {
         let tabWidth = max(1, tabWidth)
         var output: [Unit] = []
@@ -167,9 +179,17 @@ enum TerminalDifferenceCell {
             for (index, part) in parts.enumerated() {
                 let string = String(part)
                 let columns = max(0, TerminalDisplay.width(of: string))
+                let boundary: BreakKind
+                if index == parts.count - 1, breaks.lexical.contains(end) {
+                    boundary = .lexical
+                } else if index == parts.count - 1, breaks.identifier.contains(end) {
+                    boundary = .identifier
+                } else {
+                    boundary = .none
+                }
                 output.append(.init(
                     text: string, columns: columns, changed: changed,
-                    breakAfter: index == parts.count - 1 && breaks.contains(end)
+                    breakAfter: boundary
                 ))
                 column += columns
             }
@@ -181,21 +201,35 @@ enum TerminalDifferenceCell {
     private static func preferredBoundaries(
         in source: String,
         policy: TerminalDifferenceRenderOptions.Wrap
-    ) -> Set<Int> {
+    ) -> Boundaries {
         switch policy {
         case .characters:
-            return []
+            return .init()
         case .words:
-            var offsets: Set<Int> = []
+            var result = Boundaries()
             var end = 0
             for character in source {
                 end += String(character).utf8.count
-                if character.isWhitespace { offsets.insert(end) }
+                if character.isWhitespace { result.lexical.insert(end) }
             }
-            return offsets
+            return result
         case .tokens:
-            guard let segments = try? TokenBoundaries.lexical(source) else { return [] }
-            return Set(segments.map { $0.utf8.upperBound.offset })
+            guard let segments = try? TokenBoundaries.lexical(source) else {
+                return .init()
+            }
+            var result = Boundaries()
+            for segment in segments {
+                result.lexical.insert(segment.utf8.upperBound.offset)
+                guard segment.kind == .word else { continue }
+                let components = Case.segments(segment.rawValue)
+                // A candidate may split Unicode scalars within a grapheme;
+                // units() accepts only boundaries at Character ends.
+                let base = segment.utf8.lowerBound.offset
+                for component in components.dropLast() where component.kind == .component {
+                    result.identifier.insert(base + component.utf8.upperBound)
+                }
+            }
+            return result
         }
     }
 
@@ -209,7 +243,8 @@ enum TerminalDifferenceCell {
         while cursor < units.count {
             var end = cursor
             var occupied = 0
-            var preferred: Int?
+            var lexical: Int?
+            var identifier: Int?
             while end < units.count {
                 let size = units[end].columns
                 if size > width || (occupied > 0 && occupied + size > width) {
@@ -217,19 +252,25 @@ enum TerminalDifferenceCell {
                 }
                 occupied += size
                 end += 1
-                if units[end - 1].breakAfter { preferred = end }
+                switch units[end - 1].breakAfter {
+                case .lexical:
+                    lexical = end
+                case .identifier:
+                    identifier = end
+                case .none:
+                    break
+                }
             }
             if end == cursor {
                 // Preserve the pre-existing safe fallback for an oversized grapheme.
                 result.append([.init(text: "?", columns: 1,
-                                     changed: units[cursor].changed, breakAfter: false)])
+                                     changed: units[cursor].changed, breakAfter: .none)])
                 cursor += 1
                 continue
             }
             let chosen: Int
-            if policy != .characters, end < units.count, let preferred,
-               preferred > cursor {
-                chosen = preferred
+            if policy != .characters, end < units.count {
+                chosen = lexical ?? identifier ?? end
             } else {
                 chosen = end
             }

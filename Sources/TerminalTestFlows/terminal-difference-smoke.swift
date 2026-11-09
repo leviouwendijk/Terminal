@@ -457,6 +457,47 @@ enum TerminalDifferenceSmoke {
               selective.physicalRows > 2 else {
             throw Failure.incorrectRowCount
         }
+        // Prefer source-preserving casing boundaries over mid-identifier splits.
+        // Lexical breaks still take precedence; Character breaks remain fallback.
+        let identifierOld = "HTTPServerConfigurationManagerHandlerLoopA"
+        let identifierNew = "HTTPServerConfigurationManagerHandlerLoopB"
+        let identifierDifference = TextDiffer.diff(
+            old: identifierOld + "\n", new: identifierNew + "\n"
+        )
+        let identifierAnalysis = identifierDifference.analyze(options: .init(
+            pairing: .similarity(minimum: 0.3), inline: .characters
+        ))
+        let identifierProjection = DifferenceLayout.project(
+            identifierAnalysis, mode: .split, options: splitOptions
+        )
+        let identifierTokens = TerminalDifferenceRenderer.render(
+            identifierProjection, options: .init(
+                base: splitOptions, style: .filled, width: .fixed(48), wrap: .tokens
+            )
+        )
+        let identifierWords = TerminalDifferenceRenderer.render(
+            identifierProjection, options: .init(
+                base: splitOptions, style: .filled, width: .fixed(48), wrap: .words
+            )
+        )
+        func firstLeftContent(_ output: String) -> String? {
+            guard let row = output.components(separatedBy: "\n").first(where: { $0.contains("│") }),
+                  let divider = row.range(of: "│") else { return nil }
+            let pane = decodedStyle(row[..<divider.lowerBound]).plain
+            // The one-column bar and fixed six-column number/marker prefix.
+            guard pane.count >= 7 else { return nil }
+            return String(pane.dropFirst(7)).trimmingCharacters(in: .whitespaces)
+        }
+        guard firstLeftContent(identifierTokens) == "HTTPServer",
+              firstLeftContent(identifierWords) == "HTTPServerConf",
+              identifierTokens.components(separatedBy: "\n")
+                .filter({ $0.contains("│") })
+                .allSatisfy({ TerminalDisplay.width(of: $0) == 48 }),
+              identifierWords.components(separatedBy: "\n")
+                .filter({ $0.contains("│") })
+                .allSatisfy({ TerminalDisplay.width(of: $0) == 48 }) else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }

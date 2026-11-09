@@ -180,6 +180,26 @@ struct TerminalDifferencePreview {
             edgeProjection, options: .init(base: split, style: .filled,
                                            width: .terminal, wrap: .tokens)
         ))
+        let identifierDifference = TextDiffer.diff(
+            old: "HTTPServerConfigurationManagerHandlerLoopA\n",
+            new: "HTTPServerConfigurationManagerHandlerLoopB\n"
+        )
+        let identifierAnalysis = identifierDifference.analyze(options: .init(
+            pairing: .similarity(minimum: 0.3), inline: .characters
+        ))
+        let identifierProjection = DifferenceLayout.project(
+            identifierAnalysis, mode: .split, options: split
+        )
+        show("IDENTIFIER / TOKENS / 48 COLUMNS / FILLED", TerminalDifferenceRenderer.render(
+            identifierProjection, options: .init(
+                base: split, style: .filled, width: .fixed(48), wrap: .tokens
+            )
+        ))
+        show("IDENTIFIER / WORDS / 48 COLUMNS / FILLED", TerminalDifferenceRenderer.render(
+            identifierProjection, options: .init(
+                base: split, style: .filled, width: .fixed(48), wrap: .words
+            )
+        ))
         print("\nDIFF PREVIEW PASSED")
     }
 

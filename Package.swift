@@ -63,6 +63,7 @@ let package = Package(
                 .product(name: "ANSI", package: "ANSI"),
                 .product(name: "Difference", package: "Difference"),
                 .product(name: "Tokens", package: "Tokens"),
+                .product(name: "Primitives", package: "Primitives"),
                 .product(name: "Strings", package: "Strings"),
                 .product(name: "Clipboard", package: "Clipboard"),
             ],
