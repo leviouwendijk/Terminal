@@ -36,6 +36,10 @@ let package = Package(
             targets: ["TerminalDifferencePreview"]
         ),
         .executable(
+            name: "graphpreview",
+            targets: ["TerminalGraphPreview"]
+        ),
+        .executable(
             name: "t_terminal_reporting",
             targets: ["TerminalReportingTesting"]
         ),
@@ -93,6 +97,14 @@ let package = Package(
                 .product(name: "Reporting", package: "Reporting"),
                 .product(name: "Search", package: "Search"),
                 .product(name: "Math", package: "Math"),
+            ]
+        ),
+        .executableTarget(
+            name: "TerminalGraphPreview",
+            dependencies: [
+                "Terminal",
+                "TerminalGraph",
+                .product(name: "Primitives", package: "Primitives"),
             ]
         ),
         .executableTarget(

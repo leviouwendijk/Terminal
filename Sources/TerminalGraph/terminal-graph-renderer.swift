@@ -82,19 +82,11 @@ public enum TerminalGraph {
                 for edge in layout.edges {
                     let points = edge.points.map { (row: $0.row * 2, col: $0.lane * 4) }
                     for (a, b) in zip(points, points.dropFirst()) {
-                        let dr = b.row == a.row ? 0 : (b.row > a.row ? 1 : -1)
-                        let dc = b.col == a.col ? 0 : (b.col > a.col ? 1 : -1)
-                        let steps = max(abs(b.row - a.row), abs(b.col - a.col))
-                        for step in 0..<steps {
-                            let r = a.row + dr * step
-                            let c = a.col + dc * step
-                            let nr = r + dr
-                            let nc = c + dc
-                            let bits: UInt8 = dr > 0 ? 4 : dr < 0 ? 1 : dc > 0 ? 2 : 8
-                            let reverse: UInt8 = dr > 0 ? 1 : dr < 0 ? 4 : dc > 0 ? 8 : 2
-                            grid[r][c] |= bits
-                            grid[nr][nc] |= reverse
-                        }
+                        TerminalGraphStroke.trace(
+                            from: .init(row: a.row, column: a.col),
+                            to: .init(row: b.row, column: b.col),
+                            into: &grid
+                        )
                     }
                     let first = edge.points.first?.row ?? 0
                     let last = edge.points.last?.row ?? 0
@@ -103,7 +95,7 @@ public enum TerminalGraph {
                 var nodesByRow: [Int: GraphLayout<NodeID, EdgeID>.Node] = [:]
                 for node in layout.nodes { nodesByRow[node.position.row * 2] = node }
                 for row in 0..<height {
-                    var glyphs = grid[row].map(glyph)
+                    var glyphs = grid[row].map(TerminalGraphStroke.glyph)
                     if let node = nodesByRow[row] {
                         glyphs[node.position.lane * 4] = "●"
                     }
@@ -164,25 +156,6 @@ public enum TerminalGraph {
             TerminalTextLayout(text: text, columns: width).rows.map(\.content)
         }
 
-        private func glyph(_ mask: UInt8) -> Character {
-            switch mask {
-            case 1: "╵"
-            case 2: "╶"
-            case 3: "└"
-            case 4: "╷"
-            case 5: "│"
-            case 6: "┌"
-            case 7: "├"
-            case 8: "╴"
-            case 9: "┘"
-            case 10: "─"
-            case 11: "┴"
-            case 12: "┐"
-            case 13: "┤"
-            case 14: "┬"
-            case 15: "┼"
-            default: " "
-            }
-        }
+
     }
 }
