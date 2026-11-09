@@ -341,6 +341,122 @@ enum TerminalDifferenceSmoke {
                 throw Failure.incorrectRowCount
             }
         }
+        // Token wrapping must preserve every source grapheme and its inline
+        // assignment across ANSI-serialized physical rows, not merely widths.
+        // The bold SGR code is emitted only by the inline styles in .filled.
+        func decodedStyle(_ pane: Substring) -> (plain: String, inline: String) {
+            var plain = ""
+            var inline = ""
+            var isInline = false
+            var cursor = pane.startIndex
+
+            while cursor < pane.endIndex {
+                if pane[cursor] == "\u{001B}" {
+                    let next = pane.index(after: cursor)
+                    if next < pane.endIndex, pane[next] == "[",
+                       let end = pane[next...].firstIndex(of: "m") {
+                        let sequence = pane[cursor...end]
+                        if sequence == "\u{001B}[1m" {
+                            isInline = true
+                        } else if sequence == "\u{001B}[0m" {
+                            isInline = false
+                        }
+                        cursor = pane.index(after: end)
+                        continue
+                    }
+                }
+                let character = pane[cursor]
+                plain.append(character)
+                if isInline {
+                    inline.append(character)
+                }
+                cursor = pane.index(after: cursor)
+            }
+            return (plain, inline)
+        }
+
+        func inlineSides(_ rendered: String) -> (
+            old: String, new: String, oldPlain: String, newPlain: String,
+            oldRows: Int, newRows: Int, physicalRows: Int
+        ) {
+            var old = ""
+            var new = ""
+            var oldPlain = ""
+            var newPlain = ""
+            var oldRows = 0
+            var newRows = 0
+            var physicalRows = 0
+            for line in rendered.components(separatedBy: "\n") {
+                guard let divider = line.range(of: "│") else { continue }
+                physicalRows += 1
+                let left = decodedStyle(line[..<divider.lowerBound])
+                let right = decodedStyle(line[divider.upperBound...])
+                old += left.inline
+                new += right.inline
+                oldPlain += left.plain
+                newPlain += right.plain
+                if !left.inline.isEmpty { oldRows += 1 }
+                if !right.inline.isEmpty { newRows += 1 }
+            }
+            return (old, new, oldPlain, newPlain, oldRows, newRows, physicalRows)
+        }
+
+        let oldSuffix = String(repeating: "a", count: 70)
+            + "  日本語e\u{301}  "
+        let newSuffix = String(repeating: "B", count: 74)
+            + "漢字東京BBBB"
+        let completeDifference = TextDiffer.diff(
+            old: "Q" + oldSuffix + "\n",
+            new: "Q" + newSuffix + "\n"
+        )
+        let completeAnalysis = completeDifference.analyze(options: .init(
+            pairing: .similarity(minimum: 0.0), inline: .characters
+        ))
+        let completeProjection = DifferenceLayout.project(
+            completeAnalysis, mode: .split, options: splitOptions
+        )
+        guard completeProjection.rows.contains(where: {
+            !($0.old?.spans.isEmpty ?? true) && !($0.new?.spans.isEmpty ?? true)
+        }) else {
+            throw Failure.incorrectRowCount
+        }
+
+        for columns in [48, 56, 80] {
+            let output = TerminalDifferenceRenderer.render(
+                completeProjection,
+                options: .init(
+                    base: splitOptions,
+                    style: .filled,
+                    width: .fixed(columns),
+                    wrap: .tokens
+                )
+            )
+            let decoded = inlineSides(output)
+            let rows = output.components(separatedBy: "\n")
+                .filter { $0.contains("│") }
+            // Every changed character, including source spaces, CJK and
+            // composed graphemes, must survive wrapping in the right order.
+            // The sole unchanged anchor Q must appear once in each pane.
+            guard decoded.old.utf8.elementsEqual(oldSuffix.utf8),
+                  decoded.new.utf8.elementsEqual(newSuffix.utf8),
+                  decoded.oldPlain.filter({ $0 == "Q" }).count == 1,
+                  decoded.newPlain.filter({ $0 == "Q" }).count == 1,
+                  decoded.oldRows > 1,
+                  decoded.newRows > 1,
+                  rows.count == decoded.physicalRows,
+                  rows.allSatisfy({ TerminalDisplay.width(of: $0) == columns }) else {
+                throw Failure.incorrectRowCount
+            }
+        }
+
+        // A selective inline replacement must not color surrounding text,
+        // even when the source line wraps into many physical rows.
+        let selective = inlineSides(tokenWrapped)
+        guard selective.old.utf8.elementsEqual("30".utf8),
+              selective.new.utf8.elementsEqual("45".utf8),
+              selective.physicalRows > 2 else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }
