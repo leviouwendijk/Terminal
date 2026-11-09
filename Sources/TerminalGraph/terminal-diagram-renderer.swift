@@ -19,25 +19,52 @@ public extension TerminalGraph {
                 ($0.id, clean(label($0.id)))
             })
             let width = min(14, max(5, (labels.values.map(\.count).max() ?? 0) + 2))
-            let pitch = width + 4
             let step = 6
-            if diagram.lane_count > 32 || diagram.row_count > 120 {
+            if diagram.nodes.isEmpty {
+                return Projection(
+                    lines: [TerminalDisplay.clipped("(empty graph)", columns: available)],
+                    nodeRows: [:], edgeRows: [:], referenceRows: [:]
+                )
+            }
+            guard diagram.lane_count <= 32, diagram.row_count <= 120 else {
                 return compact(diagram, width: available, labels: labels, edgeLabel: edgeLabel)
             }
-            let graphicWidth = diagram.lane_count * pitch
-            let graphicHeight = max(0, diagram.row_count - 1) * step + (diagram.nodes.isEmpty ? 0 : 1)
-
-            if diagram.nodes.isEmpty { return Projection(
-                lines: [TerminalDisplay.clipped("(empty graph)", columns: available)],
-                nodeRows: [:], edgeRows: [:], referenceRows: [:]
-            ) }
-            if graphicWidth > available || graphicHeight > 700 ||
-               diagram.lane_count > 32 || graphicWidth * graphicHeight > 150_000 {
+            // Occupied lanes need label room; routing-only lanes do not.
+            var halfWidths = Array(repeating: 0, count: diagram.lane_count)
+            for node in diagram.nodes {
+                let nodeWidth = min(width, (labels[node.id]?.count ?? 0) + 2)
+                let lane = node.position.lane
+                halfWidths[lane] = max(halfWidths[lane], (nodeWidth + 1) / 2)
+            }
+            func geometry(gap: Int) -> (centers: [Int], width: Int) {
+                var centers = Array(repeating: 0, count: diagram.lane_count)
+                centers[0] = halfWidths[0] + 1
+                if centers.count > 1 {
+                    for lane in 1..<centers.count {
+                        let distance = max(2, halfWidths[lane - 1] + halfWidths[lane] + gap)
+                        centers[lane] = centers[lane - 1] + distance
+                    }
+                }
+                return (centers, centers[centers.count - 1] + halfWidths[halfWidths.count - 1] + 2)
+            }
+            var chosen: (centers: [Int], width: Int)?
+            for gap in [4, 3, 2, 1] {
+                let candidate = geometry(gap: gap)
+                if candidate.width <= available {
+                    chosen = candidate
+                    break
+                }
+            }
+            guard let chosen else {
+                return compact(diagram, width: available, labels: labels, edgeLabel: edgeLabel)
+            }
+            let graphicWidth = chosen.width
+            let graphicHeight = (diagram.row_count - 1) * step + 1
+            if graphicHeight > 700 || graphicWidth * graphicHeight > 150_000 {
                 return compact(diagram, width: available, labels: labels, edgeLabel: edgeLabel)
             }
 
-            let center = width / 2
-            func x(_ p: GraphDiagram<NodeID, EdgeID>.Point) -> Int { p.lane * pitch + center + 1 }
+            func x(_ p: GraphDiagram<NodeID, EdgeID>.Point) -> Int { chosen.centers[p.lane] }
             func y(_ p: GraphDiagram<NodeID, EdgeID>.Point) -> Int { p.row * step }
             var strokes = Array(repeating: Array(repeating: UInt8(0), count: graphicWidth), count: graphicHeight)
             var nodeRows: [NodeID: Int] = [:]

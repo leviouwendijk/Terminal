@@ -104,6 +104,15 @@ struct TerminalGraphSmoke {
             try check(projected.edgeRows.count == 14, "diagram edges \(columns)")
             try check(projected.edgeRows["c1"] != nil && projected.edgeRows["c2"] != nil,
                       "both feedback edges \(columns)")
+            if columns == 60 {
+                let picture = projected.lines.joined(separator: "\n")
+                try check(picture.contains("[P1]") && picture.contains("[I1]"),
+                          "spatial diagram at 60 columns")
+                try check(picture.contains("│") && picture.contains("─"),
+                          "routed edges at 60 columns")
+                try check(!picture.contains("row 0, lane 1:"),
+                          "no compact fallback at 60 columns")
+            }
             if columns == 140 {
                 let picture = projected.lines.joined(separator: "\n")
                 try check(picture.contains("[P1]") && picture.contains("[I1]"), "spatial labels")
