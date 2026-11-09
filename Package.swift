@@ -32,6 +32,10 @@ let package = Package(
             ]
         ),
         .executable(
+            name: "diffpreview",
+            targets: ["TerminalDifferencePreview"]
+        ),
+        .executable(
             name: "t_terminal_reporting",
             targets: ["TerminalReportingTesting"]
         ),
@@ -105,6 +109,13 @@ let package = Package(
                 .product(name: "Search", package: "Search"),
                 .product(name: "Math", package: "Math"),
                 .product(name: "DSL", package: "DSL"),
+            ]
+        ),
+        .executableTarget(
+            name: "TerminalDifferencePreview",
+            dependencies: [
+                "Terminal",
+                .product(name: "Difference", package: "Difference")
             ]
         ),
         .executableTarget(
