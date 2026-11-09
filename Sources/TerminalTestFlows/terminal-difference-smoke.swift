@@ -176,6 +176,30 @@ enum TerminalDifferenceSmoke {
         guard paddedRows.allSatisfy({ TerminalDisplay.width(of: $0) <= 80 }) else {
             throw Failure.incorrectRowCount
         }
+        let inlineDifference = TextDiffer.diff(
+            old: "let timeout = 30; retries = 2\n",
+            new: "let timeout = 45; retries = 4\n"
+        )
+        let analyzed = inlineDifference.analyze(options: .init(
+            pairing: .similarity(minimum: 0.3), inline: .characters
+        ))
+        let annotated = DifferenceLayout.project(analyzed, mode: .split, options: splitOptions)
+        let highlighted = TerminalDifferenceRenderer.render(
+            annotated, options: .init(base: splitOptions, style: .filled, width: .fixed(56))
+        )
+        let highlightRows = highlighted.components(separatedBy: "\n").filter { $0.contains("│") }
+        guard !highlightRows.isEmpty,
+              highlightRows.allSatisfy({ TerminalDisplay.width(of: $0) == 56 }),
+              highlighted.contains("\u{001B}[48;2;") else {
+            throw Failure.incorrectRowCount
+        }
+        let unifiedAnalysis = DifferenceLayout.project(analyzed, mode: .unified, options: splitOptions)
+        let unifiedHighlight = TerminalDifferenceRenderer.render(
+            unifiedAnalysis, options: .init(base: splitOptions, style: .standard, width: .fixed(56))
+        )
+        guard unifiedHighlight.contains("\u{001B}[48;2;") else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }

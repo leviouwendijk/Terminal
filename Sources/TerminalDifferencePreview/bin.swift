@@ -114,6 +114,25 @@ struct TerminalDifferencePreview {
         show("SPLIT / TERMINAL WIDTH", TerminalDifferenceRenderer.render(
             projected, options: .init(base: split, style: .standard, width: .terminal)
         ))
+        let annotatedDifference = longDifference.analyze(options: .init(
+            pairing: .similarity(minimum: 0.3), inline: .characters
+        ))
+        let annotatedSplit = DifferenceLayout.project(
+            annotatedDifference, mode: .split, options: split
+        )
+        let annotatedUnified = DifferenceLayout.project(
+            annotatedDifference, mode: .unified, options: split
+        )
+        show("INLINE / SPLIT / CONTENT MAX 100", TerminalDifferenceRenderer.render(
+            annotatedSplit, options: .init(base: split, style: .filled,
+                                           width: .content(padding: 2, limit: 100))
+        ))
+        show("INLINE / SPLIT / 56 COLUMNS", TerminalDifferenceRenderer.render(
+            annotatedSplit, options: .init(base: split, style: .filled, width: .fixed(56))
+        ))
+        show("INLINE / UNIFIED / 80 COLUMNS", TerminalDifferenceRenderer.render(
+            annotatedUnified, options: .init(base: split, style: .standard, width: .fixed(80))
+        ))
         print("\nDIFF PREVIEW PASSED")
     }
 

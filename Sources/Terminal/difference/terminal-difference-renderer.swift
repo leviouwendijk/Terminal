@@ -13,6 +13,8 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
     public var separator: TerminalStyle
     public var insertBar: TerminalStyle
     public var deleteBar: TerminalStyle
+    public var inlineInsert: TerminalStyle
+    public var inlineDelete: TerminalStyle
     public var insertRow: TerminalStyle?
     public var deleteRow: TerminalStyle?
 
@@ -29,6 +31,16 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
         separator: TerminalStyle = .init(.brightBlack),
         insertBar: TerminalStyle = .init(.brightGreen),
         deleteBar: TerminalStyle = .init(.brightRed),
+        inlineInsert: TerminalStyle = .init(
+            foreground: .rgb(red: 245, green: 255, blue: 248),
+            background: .rgb(red: 18, green: 119, blue: 66),
+            codes: [.bold]
+        ),
+        inlineDelete: TerminalStyle = .init(
+            foreground: .rgb(red: 255, green: 245, blue: 246),
+            background: .rgb(red: 164, green: 42, blue: 66),
+            codes: [.bold]
+        ),
         insertRow: TerminalStyle? = nil,
         deleteRow: TerminalStyle? = nil
     ) {
@@ -44,6 +56,8 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
         self.separator = separator
         self.insertBar = insertBar
         self.deleteBar = deleteBar
+        self.inlineInsert = inlineInsert
+        self.inlineDelete = inlineDelete
         self.insertRow = insertRow
         self.deleteRow = deleteRow
     }
