@@ -1,6 +1,7 @@
 import Foundation
 import Difference
 import Terminal
+import Tokens
 
 enum TerminalDifferenceSmoke {
     enum Failure: Error {
@@ -305,6 +306,41 @@ enum TerminalDifferenceSmoke {
             }
         }
 
+        let lexicalSource = "HTTPServer42: 日本語 🇯🇵 e\u{301}"
+        let boundaries = try TokenBoundaries.lexical(lexicalSource)
+        let lexicalBytes = Array(lexicalSource.utf8)
+        var previousEnd = 0
+        for segment in boundaries {
+            let start = segment.utf8.lowerBound.offset
+            let end = segment.utf8.upperBound.offset
+            guard start == previousEnd,
+                  String(decoding: lexicalBytes[start..<end], as: UTF8.self) == segment.rawValue else {
+                throw Failure.incorrectRowCount
+            }
+            _ = try segment.coordinates(in: lexicalSource)
+            previousEnd = end
+        }
+        guard previousEnd == lexicalBytes.count,
+              boundaries.map(\.rawValue).joined() == lexicalSource else {
+            throw Failure.incorrectRowCount
+        }
+        let tokenWrapped = TerminalDifferenceRenderer.render(
+            edgeSplit, options: .init(
+                base: splitOptions, style: .filled, width: .fixed(56), wrap: .tokens
+            )
+        )
+        let wordWrapped = TerminalDifferenceRenderer.render(
+            edgeSplit, options: .init(
+                base: splitOptions, style: .filled, width: .fixed(56), wrap: .words
+            )
+        )
+        for output in [tokenWrapped, wordWrapped] {
+            let rows = output.components(separatedBy: "\n").filter { $0.contains("│") }
+            guard !rows.isEmpty, rows.allSatisfy({ TerminalDisplay.width(of: $0) == 56 }),
+                  output.contains("\u{001B}[48;2;") else {
+                throw Failure.incorrectRowCount
+            }
+        }
         print("terminal difference preset smoke passed")
     }
 }

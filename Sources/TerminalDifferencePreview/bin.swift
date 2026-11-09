@@ -168,6 +168,18 @@ struct TerminalDifferencePreview {
             throw Failure.incorrectRowCount
         }
         show("UNICODE WIDTH / EXPECTED 16 / ACTUAL \(measured)", widthSample)
+        show("TOKENS / SPLIT / 56 COLUMNS / FILLED", TerminalDifferenceRenderer.render(
+            edgeProjection, options: .init(base: split, style: .filled,
+                                           width: .fixed(56), wrap: .tokens)
+        ))
+        show("WORDS / SPLIT / 56 COLUMNS / FILLED", TerminalDifferenceRenderer.render(
+            edgeProjection, options: .init(base: split, style: .filled,
+                                           width: .fixed(56), wrap: .words)
+        ))
+        show("TOKENS / SPLIT / TERMINAL WIDTH / FILLED", TerminalDifferenceRenderer.render(
+            edgeProjection, options: .init(base: split, style: .filled,
+                                           width: .terminal, wrap: .tokens)
+        ))
         print("\nDIFF PREVIEW PASSED")
     }
 

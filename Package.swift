@@ -47,6 +47,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/leviouwendijk/ANSI", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Difference", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/Tokens", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Strings", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/DSL", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Primitives.git", branch: "master"),
@@ -61,6 +62,7 @@ let package = Package(
             dependencies: [
                 .product(name: "ANSI", package: "ANSI"),
                 .product(name: "Difference", package: "Difference"),
+                .product(name: "Tokens", package: "Tokens"),
                 .product(name: "Strings", package: "Strings"),
                 .product(name: "Clipboard", package: "Clipboard"),
             ],
@@ -131,6 +133,7 @@ let package = Package(
                     name: "Difference",
                     package: "Difference"
                 ),
+                .product(name: "Tokens", package: "Tokens"),
             ]
         ),
     ]

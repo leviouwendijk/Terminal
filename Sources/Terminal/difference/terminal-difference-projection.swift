@@ -9,7 +9,7 @@ public extension TerminalDifferenceRenderer {
         tabWidth: Int = 4
     ) -> String {
         if projection.mode == .unified {
-            if hasInline(projection) {
+            if hasInline(projection) || options.wrap != .characters {
                 return renderUnifiedInline(projection, options: options, tabWidth: tabWidth)
             }
             return render(unifiedLayout(projection), options: options)
@@ -30,7 +30,7 @@ public extension TerminalDifferenceRenderer {
         let total = resolvedWidth(options, natural: naturalTotal, available: available)
         let minimumTotal = minimumPane * 2 + dividerWidth
         if total < minimumTotal {
-            if hasInline(projection) {
+            if hasInline(projection) || options.wrap != .characters {
                 return renderUnifiedInline(projection, options: options, tabWidth: tab)
             }
             return render(unifiedLayout(projection), options: options)
@@ -56,9 +56,11 @@ public extension TerminalDifferenceRenderer {
                 return [options.style.separator.apply(TerminalDisplay.clipped(row.text, columns: total))]
             case .content:
                 let left = TerminalDifferenceCell.make(row.old, width: leftWidth,
-                    numberWidth: numberWidth, style: options.style, tabWidth: tab)
+                    numberWidth: numberWidth, style: options.style, tabWidth: tab,
+                    wrap: options.wrap)
                 let right = TerminalDifferenceCell.make(row.new, width: rightWidth,
-                    numberWidth: numberWidth, style: options.style, tabWidth: tab)
+                    numberWidth: numberWidth, style: options.style, tabWidth: tab,
+                    wrap: options.wrap)
                 return (0..<max(left.lines.count, right.lines.count)).map { index in
                     let lhs = index < left.lines.count ? left.lines[index] : left.filler
                     let rhs = index < right.lines.count ? right.lines[index] : right.filler
@@ -167,7 +169,7 @@ public extension TerminalDifferenceRenderer {
                 let marker = cell.role == .delete ? "-" : (cell.role == .insert ? "+" : " ")
                 let physical = TerminalDifferenceCell.make(
                     cell, width: width, prefix: " \(lhs):\(rhs) \(marker) ",
-                    style: options.style, tabWidth: tab
+                    style: options.style, tabWidth: tab, wrap: options.wrap
                 )
                 return physical.lines.map { $0.render() }
             }

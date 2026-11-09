@@ -1,4 +1,5 @@
 import Difference
+import Tokens
 
 /// Physical terminal cells are measured before applying ANSI styles.
 /// Every rendered line owns exactly its declared display-column width.
@@ -32,6 +33,7 @@ enum TerminalDifferenceCell {
         let text: String
         let columns: Int
         let changed: Bool
+        let breakAfter: Bool
     }
 
     static func make(
@@ -39,7 +41,8 @@ enum TerminalDifferenceCell {
         width: Int,
         numberWidth: Int,
         style: TerminalDifferenceStyle,
-        tabWidth: Int
+        tabWidth: Int,
+        wrap: TerminalDifferenceRenderOptions.Wrap = .characters
     ) -> Result {
         guard let cell else {
             let blank = Line(
@@ -56,7 +59,8 @@ enum TerminalDifferenceCell {
             width: width,
             prefix: " \(digits) \(marker) ",
             style: style,
-            tabWidth: tabWidth
+            tabWidth: tabWidth,
+            wrap: wrap
         )
     }
 
@@ -65,7 +69,8 @@ enum TerminalDifferenceCell {
         width: Int,
         prefix: String,
         style: TerminalDifferenceStyle,
-        tabWidth: Int
+        tabWidth: Int,
+        wrap: TerminalDifferenceRenderOptions.Wrap = .characters
     ) -> Result {
         let isDelete = cell.role == .delete
         let isInsert = cell.role == .insert
@@ -80,7 +85,9 @@ enum TerminalDifferenceCell {
         let prefixWidth = TerminalDisplay.width(of: clippedPrefix)
         let contentWidth = max(1, width - 1 - prefixWidth - 1)
         let continuation = String(repeating: " ", count: prefixWidth)
-        let pieces = wrap(units(cell, tabWidth: tabWidth), width: contentWidth)
+        let breaks = preferredBoundaries(in: cell.text, policy: wrap)
+        let pieces = Self.wrap(units(cell, tabWidth: tabWidth, breaks: breaks),
+                          width: contentWidth, policy: wrap)
 
         let rows = pieces.enumerated().map { index, units -> Line in
             let start = index == 0 ? clippedPrefix : continuation
@@ -128,7 +135,9 @@ enum TerminalDifferenceCell {
         units(cell, tabWidth: tabWidth).reduce(0) { $0 + $1.columns }
     }
 
-    private static func units(_ cell: DifferenceLayout.Cell, tabWidth: Int) -> [Unit] {
+    private static func units(
+        _ cell: DifferenceLayout.Cell, tabWidth: Int, breaks: Set<Int> = []
+    ) -> [Unit] {
         let tabWidth = max(1, tabWidth)
         var output: [Unit] = []
         var column = 0
@@ -154,10 +163,14 @@ enum TerminalDifferenceCell {
                 shown = original
             }
             // Expanded tabs must be splittable at physical-cell boundaries.
-            for part in shown {
+            let parts = Array(shown)
+            for (index, part) in parts.enumerated() {
                 let string = String(part)
                 let columns = max(0, TerminalDisplay.width(of: string))
-                output.append(.init(text: string, columns: columns, changed: changed))
+                output.append(.init(
+                    text: string, columns: columns, changed: changed,
+                    breakAfter: index == parts.count - 1 && breaks.contains(end)
+                ))
                 column += columns
             }
             utf8 = end
@@ -165,27 +178,64 @@ enum TerminalDifferenceCell {
         return output
     }
 
-    private static func wrap(_ units: [Unit], width: Int) -> [[Unit]] {
-        var result: [[Unit]] = []
-        var line: [Unit] = []
-        var occupied = 0
-        for unit in units {
-            if occupied > 0 && occupied + unit.columns > width {
-                result.append(line)
-                line = []
-                occupied = 0
+    private static func preferredBoundaries(
+        in source: String,
+        policy: TerminalDifferenceRenderOptions.Wrap
+    ) -> Set<Int> {
+        switch policy {
+        case .characters:
+            return []
+        case .words:
+            var offsets: Set<Int> = []
+            var end = 0
+            for character in source {
+                end += String(character).utf8.count
+                if character.isWhitespace { offsets.insert(end) }
             }
-            if unit.columns > width {
-                // Never emit a wide grapheme beyond the pane boundary.
-                let replacement = Unit(text: "?", columns: 1, changed: unit.changed)
-                line.append(replacement)
-                occupied += 1
-            } else {
-                line.append(unit)
-                occupied += unit.columns
-            }
+            return offsets
+        case .tokens:
+            guard let segments = try? TokenBoundaries.lexical(source) else { return [] }
+            return Set(segments.map { $0.utf8.upperBound.offset })
         }
-        result.append(line)
+    }
+
+    private static func wrap(
+        _ units: [Unit], width: Int, policy: TerminalDifferenceRenderOptions.Wrap
+    ) -> [[Unit]] {
+        guard !units.isEmpty else { return [[]] }
+        let width = max(1, width)
+        var result: [[Unit]] = []
+        var cursor = 0
+        while cursor < units.count {
+            var end = cursor
+            var occupied = 0
+            var preferred: Int?
+            while end < units.count {
+                let size = units[end].columns
+                if size > width || (occupied > 0 && occupied + size > width) {
+                    break
+                }
+                occupied += size
+                end += 1
+                if units[end - 1].breakAfter { preferred = end }
+            }
+            if end == cursor {
+                // Preserve the pre-existing safe fallback for an oversized grapheme.
+                result.append([.init(text: "?", columns: 1,
+                                     changed: units[cursor].changed, breakAfter: false)])
+                cursor += 1
+                continue
+            }
+            let chosen: Int
+            if policy != .characters, end < units.count, let preferred,
+               preferred > cursor {
+                chosen = preferred
+            } else {
+                chosen = end
+            }
+            result.append(Array(units[cursor..<chosen]))
+            cursor = chosen
+        }
         return result
     }
 }
