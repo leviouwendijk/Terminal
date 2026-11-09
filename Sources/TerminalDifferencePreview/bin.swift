@@ -60,7 +60,7 @@ struct TerminalDifferencePreview {
         guard filled.contains("\u{001B}[") else { throw Failure.missing_color }
         guard patch.contains("@@ -") else { throw Failure.missing_hunk }
 
-        show("01 DEFAULT FILLED / UNIFIED", TerminalDifferenceRenderer.render(difference))
+        show("01 DEFAULT REVIEW / ADAPTIVE", TerminalDifferenceRenderer.render(difference))
         show("02 STANDARD / BARS / TWO-COLUMN GUTTER", standard)
         show("03 FILLED / BARS / TWO-COLUMN GUTTER", filled)
         show("04 FILLED / 56-COLUMN OUTPUT", fitted)
@@ -200,6 +200,14 @@ struct TerminalDifferencePreview {
                 base: split, style: .filled, width: .fixed(48), wrap: .words
             )
         ))
+        show("DEFAULT REVIEW / ADAPTIVE SPLIT / FILLED / TOKENS",
+             TerminalDifferenceRenderer.render(longDifference))
+        show("PRESET COMPACT / UNIFIED / CONTENT WIDTH",
+             TerminalDifferenceRenderer.render(longDifference, options: .compact))
+        show("PRESET PLAIN / UNIFIED / NO ANSI",
+             TerminalDifferenceRenderer.render(longDifference, options: .plain))
+        show("LEGACY RENDER PLAN / EXPLICIT",
+             TerminalDifferenceRenderer.render(longDifference, options: .legacy))
         print("\nDIFF PREVIEW PASSED")
     }
 

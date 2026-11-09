@@ -498,6 +498,47 @@ enum TerminalDifferenceSmoke {
                 .allSatisfy({ TerminalDisplay.width(of: $0) == 48 }) else {
             throw Failure.incorrectRowCount
         }
+        // Raw text uses review by default, including bounded intraline analysis.
+        // Prebuilt layouts remain explicitly legacy unless the caller chooses otherwise.
+        let presetDiff = TextDiffer.diff(
+            old: "let HTTPServerConfiguration = 30\n",
+            new: "let HTTPServerConfiguration = 45\n"
+        )
+        var reviewPreset = TerminalDifferenceRenderOptions.review
+        reviewPreset.width = .fixed(90)
+        let reviewOutput = TerminalDifferenceRenderer.render(presetDiff, options: reviewPreset)
+        let analysisOutput = TerminalDifferenceRenderer.render(
+            presetDiff.analyze(), options: reviewPreset
+        )
+        let defaultOutput = TerminalDifferenceRenderer.render(presetDiff)
+        let compactOutput = TerminalDifferenceRenderer.render(
+            presetDiff, options: .compact
+        )
+        let plainOutput = TerminalDifferenceRenderer.render(presetDiff, options: .plain)
+        let legacyOutput = TerminalDifferenceRenderer.render(presetDiff, options: .legacy)
+        let originalLayout = DifferenceLayout.make(presetDiff, options: .unified)
+        let originalOutput = TerminalDifferenceRenderer.render(
+            originalLayout, options: .legacy
+        )
+        var narrowPreset = TerminalDifferenceRenderOptions.review
+        narrowPreset.width = .fixed(56)
+        let narrowOutput = TerminalDifferenceRenderer.render(
+            presetDiff, options: narrowPreset
+        )
+        guard TerminalDifferenceRenderOptions.review.wrap == .tokens,
+              TerminalDifferenceRenderOptions.review.style == .filled,
+              reviewOutput == analysisOutput,
+              reviewOutput.contains("│"),
+              reviewOutput.contains("\u{001B}[1m"),
+              reviewOutput.contains("@@ -"),
+              !defaultOutput.isEmpty,
+              !compactOutput.contains("│"),
+              !plainOutput.contains("\u{001B}"),
+              !plainOutput.contains("│"),
+              !narrowOutput.contains("│"),
+              legacyOutput == originalOutput else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }

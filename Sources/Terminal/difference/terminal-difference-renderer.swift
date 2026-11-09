@@ -1,4 +1,9 @@
 import Difference
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 public struct TerminalDifferenceStyle: Sendable, Hashable {
     public var header: TerminalStyle
@@ -64,6 +69,24 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
 
     public static let standard = TerminalDifferenceStyle()
 
+    /// No ANSI sequences, including intraline and gutter styles.
+    public static let plain = TerminalDifferenceStyle(
+        header: .none,
+        lineNumbers: .none,
+        border: .none,
+        equal: .none,
+        insert: .none,
+        delete: .none,
+        modified: .none,
+        moved: .none,
+        moved_modified: .none,
+        separator: .none,
+        insertBar: .none,
+        deleteBar: .none,
+        inlineInsert: .none,
+        inlineDelete: .none
+    )
+
     public static let filled = TerminalDifferenceStyle(
         insertRow: TerminalStyle(
             foreground: .rgb(red: 225, green: 245, blue: 233),
@@ -89,6 +112,48 @@ public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
         case tokens
     }
 
+    /// How a raw TextDifference should be presented. Prebuilt layouts retain
+    /// their explicit render-plan semantics.
+    public enum Presentation: Sendable, Hashable {
+        case review
+        case compact
+        case plain
+        case legacy
+    }
+
+    public static let reviewBase = DifferenceRenderOptions(
+        showHeader: true,
+        showUnchangedLines: false,
+        contextLineCount: 3,
+        collapseSeparator: " ... {count} unchanged lines",
+        showHunkHeaders: true,
+        lineComponents: [.bar, .lineNumbers, .border, .marker, .text],
+        lineNumberFormat: .columns
+    )
+
+    public static let review = Self()
+    public static let compact = Self(
+        base: .unified,
+        style: .standard,
+        width: .content(),
+        wrap: .tokens,
+        presentation: .compact
+    )
+    public static let plain = Self(
+        base: .unified,
+        style: .plain,
+        width: .content(),
+        wrap: .tokens,
+        presentation: .plain
+    )
+    public static let legacy = Self(
+        base: .unified,
+        style: .filled,
+        wrap: .characters,
+        presentation: .legacy
+    )
+
+    public var presentation: Presentation
     public var wrap: Wrap
     public var width: Width?
     public var base: DifferenceRenderOptions
@@ -97,11 +162,12 @@ public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
     public var show_movement_reasons: Bool
 
     public init(
-        base: DifferenceRenderOptions = .unified,
+        base: DifferenceRenderOptions = Self.reviewBase,
         style: TerminalDifferenceStyle = .filled,
         columns: Int? = nil,
         width: Width? = nil,
-        wrap: Wrap = .characters,
+        wrap: Wrap = .tokens,
+        presentation: Presentation = .review,
         show_movement_reasons: Bool = true
     ) {
         self.base = base
@@ -109,6 +175,7 @@ public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
         self.columns = columns
         self.width = width
         self.wrap = wrap
+        self.presentation = presentation
         self.show_movement_reasons = show_movement_reasons
     }
 }
@@ -119,40 +186,75 @@ public enum TerminalDifferenceRenderer {
     ) -> String {
         render(
             difference,
-            options: .init()
+            options: .review
         )
     }
 
     public static func render(
         _ difference: TextDifference,
-        options: TerminalDifferenceRenderOptions = .init()
+        options: TerminalDifferenceRenderOptions = .review
     ) -> String {
-        render(
-            DifferenceLayout.make(
-                difference,
-                options: options.base
-            ),
+        if options.presentation == .legacy {
+            return render(
+                DifferenceLayout.make(difference, options: options.base),
+                options: options
+            )
+        }
+        return render(difference.analyze(), options: options)
+    }
+
+    /// Already-computed intraline analysis can enter the same review pipeline
+    /// without repeating the bounded comparison work.
+    public static func render(
+        _ analysis: TextDifference.Analysis,
+        options: TerminalDifferenceRenderOptions = .review
+    ) -> String {
+        if options.presentation == .legacy {
+            return render(analysis.difference, options: options)
+        }
+        let mode: DifferenceLayout.Mode
+        switch options.presentation {
+        case .review:
+            mode = reviewWidth(options) >= 75 ? .split : .unified
+        case .compact, .plain, .legacy:
+            mode = .unified
+        }
+        return render(
+            DifferenceLayout.project(analysis, mode: mode, options: options.base),
             options: options
         )
     }
 
+    /// An already-built DifferenceLayout is an explicit legacy/custom layout;
+    /// it has no original comparison from which to rederive intraline spans.
     public static func render(
         _ layout: DifferenceLayout,
-        options: TerminalDifferenceRenderOptions = .init()
+        options: TerminalDifferenceRenderOptions = .legacy
     ) -> String {
         render(
-            DifferenceRenderPlan.make(
-                layout,
-                options: options.base
-            ),
-            style: options.style,
+            DifferenceRenderPlan.make(layout, options: options.base),
+            style: options.presentation == .plain ? .plain : options.style,
             columns: options.columns
         )
     }
 
+    private static func reviewWidth(_ options: TerminalDifferenceRenderOptions) -> Int {
+        let terminal = max(1, Terminal.size(for: .standardOutput).columns)
+        switch options.width {
+        case .terminal:
+            return terminal
+        case .fixed(let value):
+            return max(1, value)
+        case .content(_, let limit):
+            return min(terminal, max(1, limit ?? terminal))
+        case nil:
+            return max(1, options.columns ?? terminal)
+        }
+    }
+
     public static func print(
         _ difference: TextDifference,
-        options: TerminalDifferenceRenderOptions = .init()
+        options: TerminalDifferenceRenderOptions = .review
     ) {
         Swift.print(
             render(
@@ -164,7 +266,7 @@ public enum TerminalDifferenceRenderer {
 
     public static func print(
         _ layout: DifferenceLayout,
-        options: TerminalDifferenceRenderOptions = .init()
+        options: TerminalDifferenceRenderOptions = .legacy
     ) {
         Swift.print(
             render(
@@ -177,15 +279,19 @@ public enum TerminalDifferenceRenderer {
     private static func printOptions(
         _ options: TerminalDifferenceRenderOptions
     ) -> TerminalDifferenceRenderOptions {
-        .init(
-            base: options.base,
-            style: options.style,
-            columns: options.columns
-                ?? Terminal.size(for: .standardOutput).columns,
-            width: options.width,
-            wrap: options.wrap,
-            show_movement_reasons: options.show_movement_reasons
-        )
+        var result = options
+        #if canImport(Darwin) || canImport(Glibc)
+        // Rendering to a String remains explicit; only print adapts to pipes.
+        if isatty(STDOUT_FILENO) == 0, result.presentation != .legacy {
+            result.presentation = .plain
+            result.style = .plain
+            result.width = .content()
+        }
+        #endif
+        if result.presentation == .legacy, result.columns == nil {
+            result.columns = Terminal.size(for: .standardOutput).columns
+        }
+        return result
     }
 
     private static func render(

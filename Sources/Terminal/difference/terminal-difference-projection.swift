@@ -8,6 +8,10 @@ public extension TerminalDifferenceRenderer {
         separator: String = "│",
         tabWidth: Int = 4
     ) -> String {
+        var options = options
+        if options.presentation == .plain {
+            options.style = .plain
+        }
         if projection.mode == .unified {
             if hasInline(projection) || options.wrap != .characters {
                 return renderUnifiedInline(projection, options: options, tabWidth: tabWidth)
@@ -97,7 +101,7 @@ public extension TerminalDifferenceRenderer {
     ) -> Int {
         let policy = options.width ?? options.columns.map {
             TerminalDifferenceRenderOptions.Width.fixed($0)
-        } ?? .content()
+        } ?? (options.presentation == .review ? .terminal : .content())
         switch policy {
         case .terminal:
             return available
