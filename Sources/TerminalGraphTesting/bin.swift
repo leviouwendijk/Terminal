@@ -67,6 +67,7 @@ struct TerminalGraphSmoke {
         let empty = try G(nodes: [], edges: []).layout()
         try check(renderer.render(empty, columns: 15, label: { $0 }) == "(empty graph)", "Empty")
         try checkBraid()
+        try checkCrossings()
         print("TerminalGraph smoke: passed")
         print(wide.lines.joined(separator: "\n"))
     }
@@ -139,6 +140,61 @@ struct TerminalGraphSmoke {
                           "same-lane labels placed within graph")
             }
         }
+    }
+
+    static func checkCrossings() throws {
+        typealias D = GraphDiagram<String, String>
+        func point(_ row: Int, _ lane: Int) -> D.Point {
+            .init(row: row, lane: lane)
+        }
+
+        let crossing = try D(
+            nodes: [
+                .init(id: "A", position: point(0, 0)),
+                .init(id: "C", position: point(0, 2)),
+                .init(id: "D", position: point(2, 0)),
+                .init(id: "B", position: point(2, 2)),
+            ],
+            edges: [
+                .init(
+                    id: "horizontal", source: "A", destination: "B",
+                    points: [point(0, 0), point(1, 0), point(1, 2), point(2, 2)]
+                ),
+                .init(
+                    id: "vertical", source: "C", destination: "D",
+                    points: [point(0, 2), point(0, 1), point(2, 1), point(2, 0)]
+                ),
+            ]
+        )
+        let renderer = TerminalGraph.DiagramRenderer()
+        let crossed = renderer.project(
+            crossing, columns: 60, label: { $0 }, edgeLabel: { _ in "" }
+        )
+        let picture = crossed.lines.joined(separator: "\n")
+        try check(picture.filter { $0 == "╳" }.count == 1,
+                  "independent through-routes have one crossing marker")
+        try check(crossed.edgeRows.count == 2,
+                  "crossing preserves both edge identities")
+        try check(crossed.lines.allSatisfy { TerminalDisplay.width(of: $0) <= 60 },
+                  "crossing respects terminal width")
+
+        let bend = try D(
+            nodes: [
+                .init(id: "A", position: point(0, 0)),
+                .init(id: "B", position: point(1, 1)),
+            ],
+            edges: [
+                .init(
+                    id: "bend", source: "A", destination: "B",
+                    points: [point(0, 0), point(0, 1), point(1, 1)]
+                ),
+            ]
+        )
+        let bent = renderer.project(
+            bend, columns: 60, label: { $0 }, edgeLabel: { _ in "" }
+        )
+        try check(!bent.lines.joined(separator: "\n").contains("╳"),
+                  "single-edge bends are not crossings")
     }
 
     static func check(_ value: @autoclosure () -> Bool, _ message: String) throws {

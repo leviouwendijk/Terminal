@@ -67,6 +67,8 @@ public extension TerminalGraph {
             func x(_ p: GraphDiagram<NodeID, EdgeID>.Point) -> Int { chosen.centers[p.lane] }
             func y(_ p: GraphDiagram<NodeID, EdgeID>.Point) -> Int { p.row * step }
             var strokes = Array(repeating: Array(repeating: UInt8(0), count: graphicWidth), count: graphicHeight)
+            // Retain edge ownership separately from the combined stroke mask.
+            var strokeOwners: [Int: [EdgeID: UInt8]] = [:]
             var nodeRows: [NodeID: Int] = [:]
             var edgeRows: [EdgeID: Range<Int>] = [:]
             var edgeTexts: [(id: EdgeID, firstRow: Int, lastRow: Int, column: Int, text: String)] = []
@@ -88,7 +90,11 @@ public extension TerminalGraph {
                     TerminalGraphStroke.trace(
                         from: .init(row: r1, column: c1),
                         to: .init(row: r2, column: c2),
-                        into: &strokes
+                        into: &strokes,
+                        record: { point, mask in
+                            let cell = point.row * graphicWidth + point.column
+                            strokeOwners[cell, default: [:]][edge.id, default: 0] |= mask
+                        }
                     )
                     if dr != 0 && length >= 4 && length > (best?.length ?? -1) {
                         best = (length, min(r1, r2), max(r1, r2), c1)
@@ -110,6 +116,14 @@ public extension TerminalGraph {
             }
 
             var canvas = strokes.map { $0.map(TerminalGraphStroke.glyph) }
+            for (cell, owners) in strokeOwners {
+                let horizontal = owners.filter { ($0.value & 10) == 10 }.map(\.key)
+                let vertical = owners.filter { ($0.value & 5) == 5 }.map(\.key)
+                if horizontal.contains(where: { h in vertical.contains(where: { $0 != h }) }) {
+                    // Independent through-routes cross here; they do not join.
+                    canvas[cell / graphicWidth][cell % graphicWidth] = "╳"
+                }
+            }
             for (row, column, arrow) in arrows where row >= 0 && row < graphicHeight && column >= 0 && column < graphicWidth {
                 canvas[row][column] = arrow
             }

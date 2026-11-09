@@ -11,7 +11,12 @@ enum TerminalGraphStroke {
         }
     }
 
-    static func trace(from start: Point, to end: Point, into grid: inout [[UInt8]]) {
+    static func trace(
+        from start: Point,
+        to end: Point,
+        into grid: inout [[UInt8]],
+        record: ((Point, UInt8) -> Void)? = nil
+    ) {
         let dr = end.row == start.row ? 0 : (end.row > start.row ? 1 : -1)
         let dc = end.column == start.column ? 0 : (end.column > start.column ? 1 : -1)
         let steps = max(abs(end.row - start.row), abs(end.column - start.column))
@@ -24,6 +29,8 @@ enum TerminalGraphStroke {
             let column = start.column + dc * step
             grid[row][column] |= forward
             grid[row + dr][column + dc] |= reverse
+            record?(Point(row: row, column: column), forward)
+            record?(Point(row: row + dr, column: column + dc), reverse)
         }
     }
 

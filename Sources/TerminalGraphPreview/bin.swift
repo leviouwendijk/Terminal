@@ -84,6 +84,9 @@ struct TerminalGraphPreview {
         )
         print("BRAID / \(columns) COLUMNS / \(diagram.nodes.count) NODES / \(diagram.edges.count) EDGES")
         print(result.lines.joined(separator: "\n"))
+        if result.lines.contains(where: { $0.contains("╳") }) {
+            print("╳ = crossing without a graph junction")
+        }
         print("")
     }
 
