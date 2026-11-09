@@ -256,6 +256,55 @@ enum TerminalDifferenceSmoke {
         }) else {
             throw Failure.incorrectRowCount
         }
+        // EOF must retain the same border column as regular source rows.
+        let eofLayout = DifferenceLayout(lines: [
+            .init(role: .equal, text: "context", coordinate: .init(old: 12, new: 12)),
+            .init(role: .delete, text: "removed", coordinate: .init(old: 13)),
+            .init(role: .endOfFile, text: "EOF")
+        ])
+
+        func borderColumn(_ line: DifferenceRenderPlan.Line) -> Int? {
+            var column = 0
+            for (index, segment) in line.segments.enumerated() {
+                if index > 0 {
+                    column += line.componentSpacing
+                }
+                if segment.component == .border {
+                    return column
+                }
+                column += TerminalDisplay.width(of: segment.text)
+            }
+            return nil
+        }
+
+        let gutterConfigurations: [[DifferenceLineRenderComponent]] = [
+            [.lineNumbers, .border, .marker, .text],
+            [.bar, .lineNumbers, .border, .marker, .text],
+            [.bar, .lineNumbers, .marker, .border, .text]
+        ]
+
+        for format in [DifferenceLineNumberFormat.compact, .columns] {
+            for components in gutterConfigurations {
+                let options = DifferenceRenderOptions(
+                    showHeader: false,
+                    showUnchangedLines: true,
+                    showEndOfFile: true,
+                    lineComponents: components,
+                    lineNumberFormat: format
+                )
+                let planned = DifferenceRenderPlan.make(eofLayout, options: options)
+                guard planned.lines.count == 3,
+                      let eof = planned.lines.last,
+                      eof.role == .endOfFile,
+                      let target = borderColumn(eof),
+                      planned.lines.dropLast().allSatisfy({ borderColumn($0) == target }),
+                      eof.segments.contains(where: { $0.component == .bar }) == components.contains(.bar),
+                      eof.segments.filter({ $0.component == .bar }).allSatisfy({ $0.text == " " }) else {
+                    throw Failure.incorrectRowCount
+                }
+            }
+        }
+
         print("terminal difference preset smoke passed")
     }
 }
