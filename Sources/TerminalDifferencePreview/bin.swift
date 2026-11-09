@@ -148,6 +148,20 @@ struct TerminalDifferencePreview {
         show("CELL GRID / SPLIT / 56 COLUMNS / WIDE GLYPHS + WRAP", TerminalDifferenceRenderer.render(
             edgeProjection, options: .init(base: split, style: .filled, width: .fixed(56))
         ))
+        let terminalColumns = Terminal.size(for: .standardOutput).columns
+        let terminalPreview = TerminalDifferenceRenderer.render(
+            edgeProjection,
+            options: .init(
+                base: split,
+                style: .filled,
+                width: .terminal
+            )
+        )
+        show(
+            "CELL GRID / SPLIT / FILLED / TERMINAL WIDTH (\(terminalColumns) COLUMNS)",
+            terminalPreview
+        )
+
         let widthSample = "日本語 漢字 🇯🇵 e\u{301}"
         let measured = TerminalDisplay.width(of: widthSample)
         guard measured == 16 else {
