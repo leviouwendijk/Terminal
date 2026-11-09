@@ -379,6 +379,16 @@ public enum TerminalDisplay {
         }
     }
 
+    #if canImport(Darwin)
+    /// Fixed Unicode locale for terminal column measurement.
+    /// Unlike setlocale(), this does not mutate process-global state.
+    /// Retained for the process lifetime so concurrent renderers can share it.
+    nonisolated(unsafe) private static let unicodeLocale: locale_t? = {
+        newlocale(LC_CTYPE_MASK, "en_US.UTF-8", nil)
+            ?? newlocale(LC_CTYPE_MASK, "UTF-8", nil)
+    }()
+    #endif
+
     private static func characterWidth(
         _ character: Character
     ) -> Int {
@@ -389,6 +399,15 @@ public enum TerminalDisplay {
         }
 
         #if canImport(Darwin)
+        // Use the explicit UTF-8 locale only for this synchronous measurement.
+        // Restore the calling thread's previous locale on every exit path.
+        let previousLocale = unicodeLocale.flatMap { uselocale($0) }
+        defer {
+            if let previousLocale {
+                _ = uselocale(previousLocale)
+            }
+        }
+
         let width = character.unicodeScalars.reduce(
             0
         ) {
@@ -396,9 +415,7 @@ public enum TerminalDisplay {
             scalar in
 
             let scalarWidth = wcwidth(
-                wchar_t(
-                    scalar.value
-                )
+                wchar_t(scalar.value)
             )
 
             if scalarWidth >= 0 {

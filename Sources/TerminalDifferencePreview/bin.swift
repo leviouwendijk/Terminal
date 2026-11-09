@@ -148,6 +148,12 @@ struct TerminalDifferencePreview {
         show("CELL GRID / SPLIT / 56 COLUMNS / WIDE GLYPHS + WRAP", TerminalDifferenceRenderer.render(
             edgeProjection, options: .init(base: split, style: .filled, width: .fixed(56))
         ))
+        let widthSample = "日本語 漢字 🇯🇵 e\u{301}"
+        let measured = TerminalDisplay.width(of: widthSample)
+        guard measured == 16 else {
+            throw Failure.incorrectRowCount
+        }
+        show("UNICODE WIDTH / EXPECTED 16 / ACTUAL \(measured)", widthSample)
         print("\nDIFF PREVIEW PASSED")
     }
 

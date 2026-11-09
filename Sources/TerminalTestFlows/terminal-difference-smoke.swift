@@ -227,6 +227,35 @@ enum TerminalDifferenceSmoke {
               edgeOutput.contains("\u{001B}[48;2;") else {
             throw Failure.incorrectRowCount
         }
+        // These expected widths are independent of TerminalDisplay's
+        // implementation, preventing its own measurements from masking errors.
+        let widthFixtures: [(String, Int)] = [
+            ("日本語", 6),
+            ("漢字", 4),
+            ("日本語 漢字", 11),
+            ("🇯🇵", 2),
+            ("e\u{301}", 1),
+            ("日本語 漢字 🇯🇵 e\u{301}", 16)
+        ]
+        guard widthFixtures.allSatisfy({ sample, expected in
+            TerminalDisplay.width(of: sample) == expected
+        }) else {
+            throw Failure.incorrectRowCount
+        }
+
+        // Verify the corrected measurement through the rendered pane boundary.
+        let correctedPhysical = edgeOutput.components(separatedBy: "\n")
+            .filter { $0.contains("│") }
+        guard correctedPhysical.allSatisfy({ line in
+            guard let divider = line.range(of: "│") else { return false }
+            let left = String(line[..<divider.lowerBound])
+            let right = String(line[divider.upperBound...])
+            return TerminalDisplay.width(of: left) == dividerColumns[0]
+                && TerminalDisplay.width(of: line) == 56
+                && !right.isEmpty
+        }) else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }
