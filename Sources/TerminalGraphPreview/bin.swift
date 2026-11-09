@@ -74,15 +74,52 @@ struct TerminalGraphPreview {
                 .init(id: $0.0, source: $0.1, destination: $0.2, value: "")
             }
         )
-        let positions = Dictionary(uniqueKeysWithValues: ids.enumerated().map { index, id in
-            (id, D.Point(row: index, lane: [1, 0, 2, 0, 2, 0, 2, 1, 1][index]))
-        })
-        let diagram = try graph.diagram(positions: positions)
+        // Event rows are categorical time coordinates. The third lane
+        // contains control events rather than part of the alternating path.
+        let p1 = D.Point(row: 0, lane: 0)
+        let i1 = D.Point(row: 1, lane: 1)
+        let p2 = D.Point(row: 2, lane: 0)
+        let i2 = D.Point(row: 3, lane: 1)
+        let p3 = D.Point(row: 4, lane: 0)
+        let i3 = D.Point(row: 5, lane: 1)
+        let positions: [String: D.Point] = [
+            "cycle_open": .init(row: 0, lane: 2),
+            "P1": p1,
+            "I1": i1,
+            "P2": p2,
+            "I2": i2,
+            "P3": p3,
+            "I3": i3,
+            "gate": .init(row: 5, lane: 2),
+            "reset_gate": .init(row: 6, lane: 2)
+        ]
+        let routes: [String: [D.Point]] = [
+            "x1": [p1, i1],
+            "x2": [i1, p2],
+            "x3": [p2, i2],
+            "x4": [i2, p3],
+            "x5": [p3, i3]
+        ]
+        let diagram = try graph.diagram(positions: positions, routes: routes)
+        let times = [0, 3, 6, 9, 12, 15, 24]
         let result = TerminalGraph.DiagramRenderer().project(
-            diagram, columns: columns, label: { $0 },
-            edgeLabel: { $0 == "c1" || $0 == "c2" ? "24h" : "3h" }
+            diagram,
+            columns: columns,
+            label: { $0 },
+            edgeLabel: { id in
+                switch id {
+                case "x1", "x2", "x3", "x4", "x5": "3h"
+                case "vP1", "vP2", "vI1", "vI2": "6h"
+                case "g1": "9h"
+                default: ""
+                }
+            },
+            rowLabel: { row in
+                row < times.count ? "t+\(times[row])h" : ""
+            }
         )
         print("BRAID / \(columns) COLUMNS / \(diagram.nodes.count) NODES / \(diagram.edges.count) EDGES")
+        print("LEFT: P / MIDDLE: I / RIGHT: cycle controls")
         print(result.lines.joined(separator: "\n"))
         if result.lines.contains(where: { $0.contains("╳") }) {
             print("╳ = crossing without a graph junction")

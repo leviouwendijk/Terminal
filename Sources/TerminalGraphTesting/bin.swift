@@ -68,6 +68,7 @@ struct TerminalGraphSmoke {
         try check(renderer.render(empty, columns: 15, label: { $0 }) == "(empty graph)", "Empty")
         try checkBraid()
         try checkCrossings()
+        try checkTemporalDiagram()
         print("TerminalGraph smoke: passed")
         print(wide.lines.joined(separator: "\n"))
     }
@@ -195,6 +196,42 @@ struct TerminalGraphSmoke {
         )
         try check(!bent.lines.joined(separator: "\n").contains("╳"),
                   "single-edge bends are not crossings")
+    }
+
+    static func checkTemporalDiagram() throws {
+        typealias D = GraphDiagram<String, String>
+        let p1 = D.Point(row: 0, lane: 0)
+        let i1 = D.Point(row: 1, lane: 2)
+        let p2 = D.Point(row: 2, lane: 0)
+        let diagram = try D(
+            nodes: [
+                .init(id: "P1", position: p1),
+                .init(id: "I1", position: i1),
+                .init(id: "P2", position: p2)
+            ],
+            edges: [
+                .init(id: "x1", source: "P1", destination: "I1", points: [p1, i1]),
+                .init(id: "x2", source: "I1", destination: "P2", points: [i1, p2]),
+                .init(id: "vP1", source: "P1", destination: "P2", points: [p1, p2])
+            ]
+        )
+        let projected = TerminalGraph.DiagramRenderer().project(
+            diagram,
+            columns: 80,
+            label: { $0 },
+            edgeLabel: { $0 == "vP1" ? "6h" : "3h" },
+            rowLabel: { row in ["t+0h", "t+3h", "t+6h"][row] }
+        )
+        let picture = projected.lines.joined(separator: "\n")
+        try check(picture.contains("t+0h") && picture.contains("t+3h") &&
+                  picture.contains("t+6h"), "time axis labels")
+        try check(picture.contains("╲") && picture.contains("╱"),
+                  "alternating diagonal directions")
+        try check(picture.contains("[P1]") && picture.contains("[I1]") &&
+                  picture.contains("[P2]"), "timeline node identities")
+        try check(projected.edgeRows.count == 3, "diagonal and vertical edge identities")
+        try check(projected.lines.allSatisfy { TerminalDisplay.width(of: $0) <= 80 },
+                  "time axis respects available width")
     }
 
     static func check(_ value: @autoclosure () -> Bool, _ message: String) throws {

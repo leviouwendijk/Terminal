@@ -34,6 +34,24 @@ enum TerminalGraphStroke {
         }
     }
 
+    /// Samples a straight diagonal in terminal-cell coordinates.
+    /// The source and destination cells are both included.
+    static func diagonalPoints(from start: Point, to end: Point) -> [Point] {
+        let deltaRow = end.row - start.row
+        let deltaColumn = end.column - start.column
+        let steps = max(abs(deltaRow), abs(deltaColumn))
+        guard deltaRow != 0 && deltaColumn != 0 else { return [] }
+
+        var points: [Point] = []
+        for index in 0...steps {
+            let progress = Double(index) / Double(steps)
+            let row = start.row + Int((Double(deltaRow) * progress).rounded())
+            let column = start.column + Int((Double(deltaColumn) * progress).rounded())
+            points.append(Point(row: row, column: column))
+        }
+        return points
+    }
+
     static func glyph(_ mask: UInt8) -> Character {
         switch mask {
         case 1: "╵"
