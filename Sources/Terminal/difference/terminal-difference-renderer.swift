@@ -63,6 +63,13 @@ public struct TerminalDifferenceStyle: Sendable, Hashable {
 }
 
 public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
+    public enum Width: Sendable, Hashable {
+        case terminal
+        case content(padding: Int = 2, limit: Int? = nil)
+        case fixed(Int)
+    }
+
+    public var width: Width?
     public var base: DifferenceRenderOptions
     public var style: TerminalDifferenceStyle
     public var columns: Int?
@@ -72,11 +79,13 @@ public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
         base: DifferenceRenderOptions = .unified,
         style: TerminalDifferenceStyle = .filled,
         columns: Int? = nil,
+        width: Width? = nil,
         show_movement_reasons: Bool = true
     ) {
         self.base = base
         self.style = style
         self.columns = columns
+        self.width = width
         self.show_movement_reasons = show_movement_reasons
     }
 }
@@ -150,6 +159,7 @@ public enum TerminalDifferenceRenderer {
             style: options.style,
             columns: options.columns
                 ?? Terminal.size(for: .standardOutput).columns,
+            width: options.width,
             show_movement_reasons: options.show_movement_reasons
         )
     }

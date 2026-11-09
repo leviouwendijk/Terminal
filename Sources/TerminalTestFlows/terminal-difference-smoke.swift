@@ -161,6 +161,21 @@ enum TerminalDifferenceSmoke {
                 throw Failure.incorrectRowCount
             }
         }
+        let geoOptions = TerminalDifferenceRenderOptions(
+            base: splitOptions, style: .filled, width: .fixed(64)
+        )
+        let geoOutput = TerminalDifferenceRenderer.render(split, options: geoOptions)
+        let geoRows = geoOutput.components(separatedBy: "\n").filter { $0.contains("│") }
+        guard !geoRows.isEmpty, geoRows.allSatisfy({ TerminalDisplay.width(of: $0) == 64 }) else {
+            throw Failure.incorrectRowCount
+        }
+        let padded = TerminalDifferenceRenderer.render(
+            split, options: .init(base: splitOptions, width: .content(padding: 2, limit: 80))
+        )
+        let paddedRows = padded.components(separatedBy: "\n").filter { $0.contains("│") }
+        guard paddedRows.allSatisfy({ TerminalDisplay.width(of: $0) <= 80 }) else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }

@@ -107,6 +107,13 @@ struct TerminalDifferencePreview {
              TerminalDifferenceRenderer.render(longProjection, options: .init(
                  base: split, style: .standard, columns: 56
              )))
+        show("SPLIT / CONTENT WIDTH / MAX 100", TerminalDifferenceRenderer.render(
+            longProjection, options: .init(base: split, style: .filled,
+                                           width: .content(padding: 2, limit: 100))
+        ))
+        show("SPLIT / TERMINAL WIDTH", TerminalDifferenceRenderer.render(
+            projected, options: .init(base: split, style: .standard, width: .terminal)
+        ))
         print("\nDIFF PREVIEW PASSED")
     }
 
