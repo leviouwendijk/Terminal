@@ -1,4 +1,5 @@
 import Foundation
+import Difference
 import Terminal
 
 enum TerminalTestCommand: String {
@@ -21,6 +22,7 @@ enum TerminalTestCommand: String {
     case choice
     case choiceState = "choice-state"
     case graph
+    case diffPipeProbe = "diff-pipe-probe"
     case help
 }
 
@@ -111,6 +113,13 @@ struct TerminalTest {
 
             case .graph:
                 try TerminalRelationshipGraphSmoke.run()
+
+            case .diffPipeProbe:
+                let difference = TextDiffer.diff(
+                    old: "let timeout = 30\n",
+                    new: "let timeout = 45\n"
+                )
+                TerminalDifferenceRenderer.print(difference)
 
             case .help:
                 printUsage()

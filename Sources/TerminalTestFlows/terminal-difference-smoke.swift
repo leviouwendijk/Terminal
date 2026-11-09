@@ -539,6 +539,25 @@ enum TerminalDifferenceSmoke {
               legacyOutput == originalOutput else {
             throw Failure.incorrectRowCount
         }
+        // A subprocess with stdout connected to a pipe must print uncolored
+        // unified review content, even though render() remains explicitly styled.
+        let pipeProbe = Process()
+        pipeProbe.executableURL = URL(fileURLWithPath: CommandLine.arguments[0])
+        pipeProbe.arguments = ["diff-pipe-probe"]
+        let outputPipe = Pipe()
+        pipeProbe.standardOutput = outputPipe
+        try pipeProbe.run()
+        let bytes = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        pipeProbe.waitUntilExit()
+        guard pipeProbe.terminationStatus == 0,
+              let printed = String(data: bytes, encoding: .utf8),
+              !printed.contains("\u{001B}"),
+              !printed.contains("│"),
+              printed.contains("let timeout = 30"),
+              printed.contains("let timeout = 45"),
+              printed.contains("@@ -") else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }
