@@ -132,6 +132,35 @@ enum TerminalDifferenceSmoke {
               patch.contains("\\ No newline at end of file") else {
             throw Failure.incorrectRowCount
         }
+        let splitSource = TextDiffer.diff(
+            old: "prefix\nlet timeout = 30\nobsolete()\nsuffix\n",
+            new: "prefix\nlet timeout = 45\nsuffix\n"
+        )
+        let splitOptions = DifferenceRenderOptions(
+            showHeader: false,
+            showUnchangedLines: false,
+            contextLineCount: 1,
+            collapseSeparator: " ... {count} unchanged lines",
+            showHunkHeaders: true
+        )
+        let split = DifferenceLayout.project(splitSource, mode: .split, options: splitOptions)
+        guard split.rows.contains(where: { $0.old?.role == .delete && $0.new?.role == .insert }),
+              split.rows.contains(where: { $0.old?.role == .delete && $0.new == nil }),
+              split.rows.contains(where: {
+                  if case .hunk = $0.kind { return true }
+                  return false
+              }) else {
+            throw Failure.incorrectRowCount
+        }
+        for columns in [120, 80, 56] {
+            let rendered = TerminalDifferenceRenderer.render(
+                split, options: .init(base: splitOptions, style: .filled, columns: columns)
+            )
+            let body = rendered.components(separatedBy: "\n").filter { $0.contains("│") }
+            guard !body.isEmpty, body.allSatisfy({ TerminalDisplay.width(of: $0) == columns }) else {
+                throw Failure.incorrectRowCount
+            }
+        }
         print("terminal difference preset smoke passed")
     }
 }
