@@ -200,6 +200,33 @@ enum TerminalDifferenceSmoke {
         guard unifiedHighlight.contains("\u{001B}[48;2;") else {
             throw Failure.incorrectRowCount
         }
+        let edgeOld = "func process() {\n" +
+            "\tlet request = network.call(timeout: 30, label: \"日本語 漢字 🇯🇵 e\u{301} extended request with many arguments and visible wrapping\")\n" +
+            "}\n"
+        let edgeNew = "func process() {\n" +
+            "\tlet request = network.call(timeout: 45, label: \"日本語 漢字 🇯🇵 e\u{301} extended request with many arguments and visible wrapping\")\n" +
+            "    log(\"updated\")\n" +
+            "}\n"
+        let edgeDiff = TextDiffer.diff(old: edgeOld, new: edgeNew)
+        let edgeAnalysis = edgeDiff.analyze(options: .init(
+            pairing: .similarity(minimum: 0.3), inline: .characters
+        ))
+        let edgeSplit = DifferenceLayout.project(edgeAnalysis, mode: .split, options: splitOptions)
+        let edgeOutput = TerminalDifferenceRenderer.render(edgeSplit, options: .init(
+            base: splitOptions, style: .filled, width: .fixed(56)
+        ))
+        let physical = edgeOutput.components(separatedBy: "\n").filter { $0.contains("│") }
+        let dividerColumns = physical.compactMap { line -> Int? in
+            guard let divider = line.range(of: "│") else { return nil }
+            return TerminalDisplay.width(of: String(line[..<divider.lowerBound]))
+        }
+        guard physical.count >= 4,
+              dividerColumns.count == physical.count,
+              Set(dividerColumns).count == 1,
+              physical.allSatisfy({ TerminalDisplay.width(of: $0) == 56 }),
+              edgeOutput.contains("\u{001B}[48;2;") else {
+            throw Failure.incorrectRowCount
+        }
         print("terminal difference preset smoke passed")
     }
 }

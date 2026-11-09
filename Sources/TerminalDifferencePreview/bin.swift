@@ -133,6 +133,21 @@ struct TerminalDifferencePreview {
         show("INLINE / UNIFIED / 80 COLUMNS", TerminalDifferenceRenderer.render(
             annotatedUnified, options: .init(base: split, style: .standard, width: .fixed(80))
         ))
+        let edgeBefore = "func process() {\n" +
+            "\tlet label = \"日本語 漢字 🇯🇵 e\u{301} some extended long content for terminal wrapping\"; timeout = 30\n" +
+            "}\n"
+        let edgeAfter = "func process() {\n" +
+            "\tlet label = \"日本語 漢字 🇯🇵 e\u{301} some extended long content for terminal wrapping\"; timeout = 45\n" +
+            "    log(\"more content on the right\")\n" +
+            "}\n"
+        let edge = TextDiffer.diff(old: edgeBefore, new: edgeAfter)
+        let edgeAnalysis = edge.analyze(options: .init(
+            pairing: .similarity(minimum: 0.3), inline: .characters
+        ))
+        let edgeProjection = DifferenceLayout.project(edgeAnalysis, mode: .split, options: split)
+        show("CELL GRID / SPLIT / 56 COLUMNS / WIDE GLYPHS + WRAP", TerminalDifferenceRenderer.render(
+            edgeProjection, options: .init(base: split, style: .filled, width: .fixed(56))
+        ))
         print("\nDIFF PREVIEW PASSED")
     }
 
