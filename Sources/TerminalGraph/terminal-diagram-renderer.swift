@@ -42,7 +42,7 @@ public extension TerminalGraph {
             var strokes = Array(repeating: Array(repeating: UInt8(0), count: graphicWidth), count: graphicHeight)
             var nodeRows: [NodeID: Int] = [:]
             var edgeRows: [EdgeID: Range<Int>] = [:]
-            var edgeTexts: [(id: EdgeID, row: Int, column: Int, text: String)] = []
+            var edgeTexts: [(id: EdgeID, firstRow: Int, lastRow: Int, column: Int, text: String)] = []
             var arrows: [(Int, Int, Character)] = []
 
             for edge in diagram.edges {
@@ -50,7 +50,7 @@ public extension TerminalGraph {
                 let low = points.map(\.row).min() ?? 0
                 let high = points.map(\.row).max() ?? 0
                 edgeRows[edge.id] = (low * step)..<(high * step + 1)
-                var best: (length: Int, row: Int, column: Int)?
+                var best: (length: Int, firstRow: Int, lastRow: Int, column: Int)?
                 for (start, end) in zip(points, points.dropFirst()) {
                     let r1 = y(start)
                     let r2 = y(end)
@@ -64,7 +64,7 @@ public extension TerminalGraph {
                         into: &strokes
                     )
                     if dr != 0 && length >= 4 && length > (best?.length ?? -1) {
-                        best = (length, (r1 + r2) / 2, c1)
+                        best = (length, min(r1, r2), max(r1, r2), c1)
                     }
                 }
                 if let previous = points.dropLast().last, let destination = points.last {
@@ -78,7 +78,7 @@ public extension TerminalGraph {
                     }
                 }
                 if let best {
-                    edgeTexts.append((edge.id, best.row, best.column + 2, clean(edgeLabel(edge.id))))
+                    edgeTexts.append((edge.id, best.firstRow, best.lastRow, best.column, clean(edgeLabel(edge.id))))
                 }
             }
 
@@ -88,9 +88,24 @@ public extension TerminalGraph {
             }
             var labelled: Set<EdgeID> = []
             for text in edgeTexts {
-                if draw(text.text, row: text.row, column: text.column,
-                        canvas: &canvas, ifFree: true) {
+                guard !text.text.isEmpty else {
                     labelled.insert(text.id)
+                    continue
+                }
+                let midpoint = (text.firstRow + text.lastRow) / 2
+                let rows = ((text.firstRow + 1)..<text.lastRow).sorted { a, b in
+                    let distanceA = abs(a - midpoint)
+                    let distanceB = abs(b - midpoint)
+                    return distanceA == distanceB ? a < b : distanceA < distanceB
+                }
+                for row in rows {
+                    if draw(text.text, row: row, column: text.column + 2,
+                            canvas: &canvas, ifFree: true) ||
+                       draw(text.text, row: row, column: text.column - text.text.count - 2,
+                            canvas: &canvas, ifFree: true) {
+                        labelled.insert(text.id)
+                        break
+                    }
                 }
             }
             for node in diagram.nodes {
@@ -101,7 +116,10 @@ public extension TerminalGraph {
                 _ = draw(box, row: row, column: x(node.position) - box.count / 2,
                          canvas: &canvas, ifFree: false)
             }
-            var lines = canvas.map { String($0).trimmingCharacters(in: .whitespaces) }
+            var lines = canvas.map { row in
+                guard let last = row.lastIndex(where: { $0 != " " }) else { return "" }
+                return String(row[...last])
+            }
             // Edge details remain available even where cramped crossings prevent labels.
             for edge in diagram.edges where !labelled.contains(edge.id) {
                 let line = "edge \(edge.id): \(edge.source) -> \(edge.destination) [\(clean(edgeLabel(edge.id)))]"

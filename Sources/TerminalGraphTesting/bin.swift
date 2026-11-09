@@ -66,8 +66,70 @@ struct TerminalGraphSmoke {
         try check(reversedProjection.nodeRows.count == 5, "Reverse orientation")
         let empty = try G(nodes: [], edges: []).layout()
         try check(renderer.render(empty, columns: 15, label: { $0 }) == "(empty graph)", "Empty")
+        try checkBraid()
         print("TerminalGraph smoke: passed")
         print(wide.lines.joined(separator: "\n"))
+    }
+
+    static func checkBraid() throws {
+        typealias G = Graph<String, String, String, String>
+        typealias D = GraphDiagram<String, String>
+        let ids = ["cycle_open", "P1", "I1", "P2", "I2", "P3", "I3", "gate", "reset_gate"]
+        let links: [(String, String, String)] = [
+            ("e_start", "cycle_open", "P1"),
+            ("x1", "P1", "I1"), ("x2", "I1", "P2"),
+            ("x3", "P2", "I2"), ("x4", "I2", "P3"),
+            ("x5", "P3", "I3"), ("x6", "I3", "gate"),
+            ("vP1", "P1", "P2"), ("vP2", "P2", "P3"),
+            ("vI1", "I1", "I2"), ("vI2", "I2", "I3"),
+            ("g1", "gate", "reset_gate"),
+            ("c1", "reset_gate", "cycle_open"),
+            ("c2", "reset_gate", "cycle_open"),
+        ]
+        let graph = try G(
+            nodes: ids.map { .init(id: $0, value: $0) },
+            edges: links.map { .init(id: $0.0, source: $0.1, destination: $0.2, value: "3h") }
+        )
+        let positions = Dictionary(uniqueKeysWithValues: ids.enumerated().map { index, id in
+            (id, D.Point(row: index, lane: [1, 0, 2, 0, 2, 0, 2, 1, 1][index]))
+        })
+        let diagram = try graph.diagram(positions: positions)
+        let renderer = TerminalGraph.DiagramRenderer()
+        for columns in [1, 8, 30, 60, 100, 140] {
+            let projected = renderer.project(diagram, columns: columns,
+                label: { $0 }, edgeLabel: { $0 == "c1" || $0 == "c2" ? "24h" : "3h" })
+            try check(projected.lines.allSatisfy { TerminalDisplay.width(of: $0) <= columns },
+                      "diagram width \(columns)")
+            try check(projected.nodeRows.count == 9, "diagram nodes \(columns)")
+            try check(projected.edgeRows.count == 14, "diagram edges \(columns)")
+            try check(projected.edgeRows["c1"] != nil && projected.edgeRows["c2"] != nil,
+                      "both feedback edges \(columns)")
+            if columns == 140 {
+                let picture = projected.lines.joined(separator: "\n")
+                try check(picture.contains("[P1]") && picture.contains("[I1]"), "spatial labels")
+                try check(picture.contains("│") && picture.contains("─"), "orthogonal routes")
+                try check(picture.contains("24h"), "feedback label")
+                try check(projected.nodeRows["P1"] != projected.nodeRows["I1"], "alternating rows")
+                func column(of id: String) throws -> Int {
+                    guard let row = projected.nodeRows[id],
+                          let range = projected.lines[row].range(of: "[\(id)]") else {
+                        throw SmokeError.failed("Missing positioned node \(id)")
+                    }
+                    return projected.lines[row].distance(
+                        from: projected.lines[row].startIndex, to: range.lowerBound
+                    )
+                }
+                let p1 = try column(of: "P1")
+                let p2 = try column(of: "P2")
+                let i1 = try column(of: "I1")
+                let i2 = try column(of: "I2")
+                let cycle = try column(of: "cycle_open")
+                try check(p1 == p2 && i1 == i2, "stable spatial lanes")
+                try check(p1 > 0 && p1 < cycle && cycle < i1, "leading padding preserved")
+                try check(!picture.contains("edge vI1:") && !picture.contains("edge vI2:"),
+                          "same-lane labels placed within graph")
+            }
+        }
     }
 
     static func check(_ value: @autoclosure () -> Bool, _ message: String) throws {
