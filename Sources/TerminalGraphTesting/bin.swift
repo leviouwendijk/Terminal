@@ -70,6 +70,7 @@ struct TerminalGraphSmoke {
         try checkCrossings()
         try checkTemporalDiagram()
         try checkDiagonalArrowSpacing()
+        try checkEdgeAwareRaster()
         print("TerminalGraph smoke: passed")
         print(wide.lines.joined(separator: "\n"))
     }
@@ -226,8 +227,8 @@ struct TerminalGraphSmoke {
         let picture = projected.lines.joined(separator: "\n")
         try check(picture.contains("t+0h") && picture.contains("t+3h") &&
                   picture.contains("t+6h"), "time axis labels")
-        try check(picture.contains("╲") && picture.contains("╱"),
-                  "alternating diagonal directions")
+        let braille = picture.unicodeScalars.filter { (0x2801...0x28ff).contains(Int($0.value)) }
+        try check(braille.count >= 4, "continuous subcell diagonals")
         try check(picture.contains("[P1]") && picture.contains("[I1]") &&
                   picture.contains("[P2]"), "timeline node identities")
         try check(projected.edgeRows.count == 3, "diagonal and vertical edge identities")
@@ -259,8 +260,8 @@ struct TerminalGraphSmoke {
                 rowLabel: { ["t+0h", "t+3h", "t+6h"][$0] }
             )
             let picture = visible.lines.joined(separator: "\n")
-            try check(!picture.contains("╲╲") && !picture.contains("╱╱"),
-                      "diagonal glyphs do not repeat horizontally at \(columns)")
+            let braille = picture.unicodeScalars.filter { (0x2801...0x28ff).contains(Int($0.value)) }
+            try check(braille.count >= 4, "subcell diagonal paths at \(columns)")
             try check(picture.contains("↙") && picture.contains("▼"),
                       "both incoming arrows survive at \(columns)")
             let arrows: [(row: Int, column: Int)] = visible.lines.enumerated().flatMap { row, line in
@@ -288,6 +289,53 @@ struct TerminalGraphSmoke {
                   "compact fallback preserves row labels")
         try check(narrow.lines.allSatisfy { TerminalDisplay.width(of: $0) <= 12 },
                   "compact fallback respects width")
+    }
+
+    static func checkEdgeAwareRaster() throws {
+        typealias D = GraphDiagram<String, String>
+        func point(_ row: Int, _ lane: Int) -> D.Point {
+            .init(row: row, lane: lane)
+        }
+        let diagram = try D(
+            nodes: [
+                .init(id: "A", position: point(0, 0)),
+                .init(id: "B", position: point(2, 2)),
+                .init(id: "C", position: point(0, 2)),
+                .init(id: "D", position: point(2, 0))
+            ],
+            edges: [
+                .init(id: "down", source: "A", destination: "B",
+                      points: [point(0, 0), point(2, 2)]),
+                .init(id: "up", source: "C", destination: "D",
+                      points: [point(0, 2), point(2, 0)])
+            ]
+        )
+        let renderer = TerminalGraph.DiagramRenderer()
+        let projected = renderer.project(diagram, columns: 80,
+                                         label: { $0 }, edgeLabel: { _ in "" })
+        let picture = projected.lines.joined(separator: "\n")
+        try check(picture.filter { $0 == "╳" }.count == 1,
+                  "independent diagonals cross once without joining")
+        try check(projected.edgeRows.count == 2 && projected.nodeRows.count == 4,
+                  "diagonal intersection preserves identities")
+
+        let branch = try D(
+            nodes: [
+                .init(id: "I1", position: point(0, 1)),
+                .init(id: "I2", position: point(2, 1)),
+                .init(id: "P2", position: point(1, 0))
+            ],
+            edges: [
+                .init(id: "repeat", source: "I1", destination: "I2",
+                      points: [point(0, 1), point(2, 1)]),
+                .init(id: "alternate", source: "I1", destination: "P2",
+                      points: [point(0, 1), point(1, 0)])
+            ]
+        )
+        let forked = renderer.project(branch, columns: 80,
+                                      label: { $0 }, edgeLabel: { _ in "" })
+        try check(!forked.lines.joined(separator: "\n").contains("╳"),
+                  "branches sharing a nearby source are not false crossings")
     }
 
     static func check(_ value: @autoclosure () -> Bool, _ message: String) throws {

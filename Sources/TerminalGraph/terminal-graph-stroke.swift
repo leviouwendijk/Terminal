@@ -1,7 +1,7 @@
 /// Shared orthogonal stroke rasterization for graph projections.
 /// Mask bits: north = 1, east = 2, south = 4, west = 8.
 enum TerminalGraphStroke {
-    struct Point {
+    struct Point: Hashable {
         let row: Int
         let column: Int
 
@@ -31,35 +31,6 @@ enum TerminalGraphStroke {
             grid[row + dr][column + dc] |= reverse
             record?(Point(row: row, column: column), forward)
             record?(Point(row: row + dr, column: column + dc), reverse)
-        }
-    }
-
-    /// Samples a straight diagonal in terminal-cell coordinates.
-    /// The source and destination cells are both included.
-    static func diagonalPoints(from start: Point, to end: Point) -> [Point] {
-        let deltaRow = end.row - start.row
-        let deltaColumn = end.column - start.column
-        let steps = max(abs(deltaRow), abs(deltaColumn))
-        guard deltaRow != 0 && deltaColumn != 0 else { return [] }
-
-        var points: [Point] = []
-        for index in 0...steps {
-            let progress = Double(index) / Double(steps)
-            let row = start.row + Int((Double(deltaRow) * progress).rounded())
-            let column = start.column + Int((Double(deltaColumn) * progress).rounded())
-            points.append(Point(row: row, column: column))
-        }
-        return points
-    }
-
-    /// Each raster row has at most one diagonal mark. Extra horizontal
-    /// samples use horizontal strokes instead of repeating diagonal glyphs.
-    static func diagonalMarks(from start: Point, to end: Point) -> [(point: Point, glyph: Character)] {
-        let points = diagonalPoints(from: start, to: end)
-        let diagonal: Character = (end.row > start.row) == (end.column > start.column) ? "╲" : "╱"
-        return points.enumerated().map { index, point in
-            let continuesInRow = index + 1 < points.count && points[index + 1].row == point.row
-            return (point: point, glyph: continuesInRow ? "─" : diagonal)
         }
     }
 
