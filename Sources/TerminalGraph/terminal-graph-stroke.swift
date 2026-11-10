@@ -52,6 +52,17 @@ enum TerminalGraphStroke {
         return points
     }
 
+    /// Each raster row has at most one diagonal mark. Extra horizontal
+    /// samples use horizontal strokes instead of repeating diagonal glyphs.
+    static func diagonalMarks(from start: Point, to end: Point) -> [(point: Point, glyph: Character)] {
+        let points = diagonalPoints(from: start, to: end)
+        let diagonal: Character = (end.row > start.row) == (end.column > start.column) ? "╲" : "╱"
+        return points.enumerated().map { index, point in
+            let continuesInRow = index + 1 < points.count && points[index + 1].row == point.row
+            return (point: point, glyph: continuesInRow ? "─" : diagonal)
+        }
+    }
+
     static func glyph(_ mask: UInt8) -> Character {
         switch mask {
         case 1: "╵"

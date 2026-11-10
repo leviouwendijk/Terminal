@@ -69,6 +69,7 @@ struct TerminalGraphSmoke {
         try checkBraid()
         try checkCrossings()
         try checkTemporalDiagram()
+        try checkDiagonalArrowSpacing()
         print("TerminalGraph smoke: passed")
         print(wide.lines.joined(separator: "\n"))
     }
@@ -232,6 +233,61 @@ struct TerminalGraphSmoke {
         try check(projected.edgeRows.count == 3, "diagonal and vertical edge identities")
         try check(projected.lines.allSatisfy { TerminalDisplay.width(of: $0) <= 80 },
                   "time axis respects available width")
+    }
+
+    static func checkDiagonalArrowSpacing() throws {
+        typealias D = GraphDiagram<String, String>
+        let p1 = D.Point(row: 0, lane: 0)
+        let i1 = D.Point(row: 1, lane: 1)
+        let p2 = D.Point(row: 2, lane: 0)
+        let diagram = try D(
+            nodes: [
+                .init(id: "P1", position: p1),
+                .init(id: "I1", position: i1),
+                .init(id: "P2", position: p2),
+            ],
+            edges: [
+                .init(id: "x1", source: "P1", destination: "I1", points: [p1, i1]),
+                .init(id: "x2", source: "I1", destination: "P2", points: [i1, p2]),
+                .init(id: "vP1", source: "P1", destination: "P2", points: [p1, p2]),
+            ]
+        )
+        let renderer = TerminalGraph.DiagramRenderer()
+        for columns in [60, 80, 100, 140] {
+            let visible = renderer.project(
+                diagram, columns: columns, label: { $0 }, edgeLabel: { _ in "" },
+                rowLabel: { ["t+0h", "t+3h", "t+6h"][$0] }
+            )
+            let picture = visible.lines.joined(separator: "\n")
+            try check(!picture.contains("╲╲") && !picture.contains("╱╱"),
+                      "diagonal glyphs do not repeat horizontally at \(columns)")
+            try check(picture.contains("↙") && picture.contains("▼"),
+                      "both incoming arrows survive at \(columns)")
+            let arrows: [(row: Int, column: Int)] = visible.lines.enumerated().flatMap { row, line in
+                line.enumerated().compactMap { column, glyph in
+                    "↙▼".contains(glyph) ? (row: row, column: column) : nil
+                }
+            }
+            try check(arrows.count == 2, "exactly two incoming arrowheads at \(columns)")
+            if arrows.count == 2 {
+                try check(abs(arrows[0].row - arrows[1].row) > 2 ||
+                          abs(arrows[0].column - arrows[1].column) > 3,
+                          "incoming arrowheads remain separated at \(columns)")
+            }
+            try check(visible.nodeRows.count == 3 && visible.edgeRows.count == 3,
+                      "node and edge identities preserved at \(columns)")
+            try check(visible.lines.allSatisfy { TerminalDisplay.width(of: $0) <= columns },
+                      "diagram respects width \(columns)")
+        }
+        let narrow = renderer.project(
+            diagram, columns: 12, label: { $0 }, edgeLabel: { _ in "" },
+            rowLabel: { ["t+0h", "t+3h", "t+6h"][$0] }
+        )
+        let narrowText = narrow.lines.joined(separator: "")
+        try check(narrowText.contains("t+3h") && narrowText.contains("t+6h"),
+                  "compact fallback preserves row labels")
+        try check(narrow.lines.allSatisfy { TerminalDisplay.width(of: $0) <= 12 },
+                  "compact fallback respects width")
     }
 
     static func check(_ value: @autoclosure () -> Bool, _ message: String) throws {

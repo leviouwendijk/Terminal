@@ -28,7 +28,8 @@ public extension TerminalGraph {
                 )
             }
             guard diagram.lane_count <= 32, diagram.row_count <= 120 else {
-                return compact(diagram, width: available, labels: labels, edgeLabel: edgeLabel)
+                return compact(diagram, width: available, labels: labels,
+                               edgeLabel: edgeLabel, rowLabel: rowLabel)
             }
             let rowLabels = (0..<diagram.row_count).map { clean(rowLabel($0)) }
             let axisWidth = rowLabels.map(\.count).max() ?? 0
@@ -60,12 +61,14 @@ public extension TerminalGraph {
                 }
             }
             guard let chosen else {
-                return compact(diagram, width: available, labels: labels, edgeLabel: edgeLabel)
+                return compact(diagram, width: available, labels: labels,
+                               edgeLabel: edgeLabel, rowLabel: rowLabel)
             }
             let graphicWidth = chosen.width
             let graphicHeight = (diagram.row_count - 1) * step + 1
             if graphicHeight > 700 || graphicWidth * graphicHeight > 150_000 {
-                return compact(diagram, width: available, labels: labels, edgeLabel: edgeLabel)
+                return compact(diagram, width: available, labels: labels,
+                               edgeLabel: edgeLabel, rowLabel: rowLabel)
             }
 
             func x(_ p: GraphDiagram<NodeID, EdgeID>.Point) -> Int { chosen.centers[p.lane] }
@@ -80,7 +83,14 @@ public extension TerminalGraph {
             let edgeLabels = Dictionary(uniqueKeysWithValues: diagram.edges.map {
                 ($0.id, clean(edgeLabel($0.id)))
             })
-            var arrows: [(Int, Int, Character)] = []
+            // Place arrowheads after the complete edge raster is available.
+            // Prefer same-lane arrows near nodes, then alternating diagonals.
+            var arrowRequests: [(
+                priority: Int,
+                order: Int,
+                candidates: [TerminalGraphStroke.Point],
+                glyph: Character
+            )] = []
 
             for edge in diagram.edges {
                 let points = edge.points
@@ -103,9 +113,12 @@ public extension TerminalGraph {
                             from: .init(row: r1, column: c1),
                             to: .init(row: r2, column: c2)
                         )
-                        let glyph: Character = (dr > 0) == (dc > 0) ? "╲" : "╱"
-                        for point in sampled {
-                            diagonalMarks.append((point, glyph, edge.id))
+                        let marks = TerminalGraphStroke.diagonalMarks(
+                            from: .init(row: r1, column: c1),
+                            to: .init(row: r2, column: c2)
+                        )
+                        for mark in marks {
+                            diagonalMarks.append((mark.point, mark.glyph, edge.id))
                         }
                         if diagonalLabel == nil && !sampled.isEmpty {
                             let midpoint = sampled[sampled.count / 2]
@@ -127,28 +140,35 @@ public extension TerminalGraph {
                     }
                 }
                 if let previous = points.dropLast().last, let destination = points.last {
-                    let dr = y(destination) - y(previous)
-                    let dc = x(destination) - x(previous)
+                    let source = TerminalGraphStroke.Point(row: y(previous), column: x(previous))
+                    let target = TerminalGraphStroke.Point(row: y(destination), column: x(destination))
+                    let dr = target.row - source.row
+                    let dc = target.column - source.column
+                    let candidates: [TerminalGraphStroke.Point]
+                    let glyph: Character
+                    let priority: Int
                     if dr != 0 && dc != 0 {
-                        let sampled = TerminalGraphStroke.diagonalPoints(
-                            from: .init(row: y(previous), column: x(previous)),
-                            to: .init(row: y(destination), column: x(destination))
-                        )
-                        if sampled.count >= 2 {
-                            let penultimate = sampled[sampled.count - 2]
-                            let direction: Character
-                            if dr > 0 {
-                                direction = dc > 0 ? "↘" : "↙"
-                            } else {
-                                direction = dc > 0 ? "↗" : "↖"
-                            }
-                            arrows.append((penultimate.row, penultimate.column, direction))
+                        let sampled = TerminalGraphStroke.diagonalPoints(from: source, to: target)
+                        candidates = Array(sampled.dropLast().reversed().prefix(8))
+                        glyph = dr > 0 ? (dc > 0 ? "↘" : "↙") : (dc > 0 ? "↗" : "↖")
+                        priority = 2
+                    } else if dr != 0 || dc != 0 {
+                        let steps = max(abs(dr), abs(dc))
+                        let rowStep = dr == 0 ? 0 : (dr > 0 ? 1 : -1)
+                        let columnStep = dc == 0 ? 0 : (dc > 0 ? 1 : -1)
+                        candidates = (1...min(8, steps)).map { offset in
+                            .init(row: target.row - rowStep * offset,
+                                  column: target.column - columnStep * offset)
                         }
-                    } else if dr != 0 {
-                        arrows.append((y(destination) - (dr > 0 ? 1 : -1), x(destination), dr > 0 ? "▼" : "▲"))
-                    } else if dc != 0 {
-                        let offset = width / 2 + 1
-                        arrows.append((y(destination), x(destination) - (dc > 0 ? offset : -offset), dc > 0 ? "▶" : "◀"))
+                        glyph = dr != 0 ? (dr > 0 ? "▼" : "▲") : (dc > 0 ? "▶" : "◀")
+                        priority = dc == 0 ? 0 : 1
+                    } else {
+                        candidates = []
+                        glyph = " "
+                        priority = 3
+                    }
+                    if !candidates.isEmpty {
+                        arrowRequests.append((priority, arrowRequests.count, candidates, glyph))
                     }
                 }
                 if let best {
@@ -184,8 +204,37 @@ public extension TerminalGraph {
                 }
                 diagonalOwners[cell, default: []].insert(mark.id)
             }
-            for (row, column, arrow) in arrows where row >= 0 && row < graphicHeight && column >= 0 && column < graphicWidth {
-                canvas[row][column] = arrow
+            // Reserve the actual node-box footprints before placing arrows.
+            // Arrowheads may move back along their own edge, but never into
+            // another node or immediately beside another arrowhead.
+            var nodeCells: Set<Int> = []
+            for node in diagram.nodes {
+                let value = String((labels[node.id] ?? "").prefix(width - 2))
+                let boxWidth = value.count + 2
+                let row = y(node.position)
+                let start = x(node.position) - boxWidth / 2
+                for column in start..<(start + boxWidth) {
+                    nodeCells.insert(row * graphicWidth + column)
+                }
+            }
+            var placedArrows: [TerminalGraphStroke.Point] = []
+            let orderedArrows = arrowRequests.sorted { a, b in
+                a.priority == b.priority ? a.order < b.order : a.priority < b.priority
+            }
+            for request in orderedArrows {
+                for point in request.candidates {
+                    guard point.row >= 0 && point.row < graphicHeight &&
+                          point.column >= 0 && point.column < graphicWidth else { continue }
+                    let cell = point.row * graphicWidth + point.column
+                    guard !nodeCells.contains(cell), canvas[point.row][point.column] != "╳",
+                          canvas[point.row][point.column] != " " else { continue }
+                    guard !placedArrows.contains(where: {
+                        abs($0.row - point.row) <= 2 && abs($0.column - point.column) <= 3
+                    }) else { continue }
+                    canvas[point.row][point.column] = request.glyph
+                    placedArrows.append(point)
+                    break
+                }
             }
             var labelled = Set(diagram.edges.compactMap { edge in
                 (edgeLabels[edge.id] ?? "").isEmpty ? edge.id : nil
@@ -243,14 +292,17 @@ public extension TerminalGraph {
             _ diagram: GraphDiagram<NodeID, EdgeID>,
             width: Int,
             labels: [NodeID: String],
-            edgeLabel: (EdgeID) -> String
+            edgeLabel: (EdgeID) -> String,
+            rowLabel: (Int) -> String
         ) -> Projection<NodeID, EdgeID, String> {
             var lines: [String] = []
             var nodeRows: [NodeID: Int] = [:]
             var edgeRows: [EdgeID: Range<Int>] = [:]
             for node in diagram.nodes {
                 nodeRows[node.id] = lines.count
-                let text = "row \(node.position.row), lane \(node.position.lane): \(labels[node.id] ?? "")"
+                let axis = clean(rowLabel(node.position.row))
+                let annotation = axis.isEmpty ? "" : " (\(axis))"
+                let text = "row \(node.position.row)\(annotation), lane \(node.position.lane): \(labels[node.id] ?? "")"
                 lines += TerminalTextLayout(text: text, columns: width).rows.map(\.content)
             }
             for edge in diagram.edges {
