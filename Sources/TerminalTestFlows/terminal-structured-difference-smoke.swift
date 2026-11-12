@@ -36,6 +36,16 @@ enum TerminalStructuredDifferenceSmoke {
             throw Failure.treeGeometry
         }
 
+        let narrowRegion = TerminalRegion(rows: 20, columns: 9)
+        let narrowTree = TerminalDifferenceRenderer.render(
+            layout,
+            options: TerminalDifferenceRenderOptions().constrained(to: narrowRegion)
+        )
+        guard narrowTree.components(separatedBy: "\n").allSatisfy({
+            TerminalDisplay.width(of: $0) <= narrowRegion.columns
+        }) else {
+            throw Failure.treeGeometry
+        }
         let colored = TerminalDifferenceRenderer.render(layout)
             .components(separatedBy: "\n")
         guard colored.count == 6,

@@ -29,15 +29,13 @@ public extension TerminalDifferenceRenderer {
         let naturalNew = max(minimumPane, projection.rows.compactMap(\.new).map {
             TerminalDifferenceCell.natural($0, tabWidth: tab) + numberWidth + 6
         }.max() ?? minimumPane)
-        let available = max(1, Terminal.size(for: .standardOutput).columns)
+        let available = options.constrainedColumns
+            ?? max(1, Terminal.size(for: .standardOutput).columns)
         let naturalTotal = sum(naturalOld, naturalNew, dividerWidth)
         let total = resolvedWidth(options, natural: naturalTotal, available: available)
         let minimumTotal = minimumPane * 2 + dividerWidth
         if total < minimumTotal {
-            if hasInline(projection) || options.wrap != .characters {
-                return renderUnifiedInline(projection, options: options, tabWidth: tab)
-            }
-            return render(unifiedLayout(projection), options: options)
+            return renderUnifiedInline(projection, options: options, tabWidth: tab)
         }
 
         let usable = total - dividerWidth
@@ -142,6 +140,14 @@ public extension TerminalDifferenceRenderer {
         return .init(lines: lines)
     }
 
+    private static func unifiedCells(_ row: DifferenceLayout.Row) -> [DifferenceLayout.Cell] {
+        if let old = row.old, let new = row.new,
+           old.role == .delete, new.role == .insert {
+            return [old, new]
+        }
+        return [row.old ?? row.new].compactMap { $0 }
+    }
+
     private static func renderUnifiedInline(
         _ projection: DifferenceLayout.Projection,
         options: TerminalDifferenceRenderOptions,
@@ -154,8 +160,22 @@ public extension TerminalDifferenceRenderer {
             guard let cell = row.old ?? row.new else { return nil }
             return TerminalDifferenceCell.natural(cell, tabWidth: tab) + prefixWidth + 2
         }.max() ?? 24)
-        let available = max(24, Terminal.size(for: .standardOutput).columns)
-        let width = max(24, resolvedWidth(options, natural: natural, available: available))
+        let available = options.constrainedColumns
+            ?? max(1, Terminal.size(for: .standardOutput).columns)
+        let width = max(1, resolvedWidth(options, natural: natural, available: available))
+        // Standard gutters cannot fit in extremely narrow regions.
+        if width < 12 {
+            return projection.rows.flatMap { row -> [String] in
+                let cells = unifiedCells(row)
+                guard !cells.isEmpty else {
+                    return [TerminalDisplay.clipped(row.text, columns: width)]
+                }
+                return cells.map { cell in
+                    let marker = cell.role == .delete ? "-" : (cell.role == .insert ? "+" : " ")
+                    return TerminalDisplay.clipped(marker + " " + cell.text, columns: width)
+                }
+            }.joined(separator: "\n")
+        }
         let lines = projection.rows.flatMap { row -> [String] in
             switch row.kind {
             case .headerOld:
@@ -165,17 +185,18 @@ public extension TerminalDifferenceRenderer {
             case .hunk, .collapsed, .endOfFile:
                 return [options.style.separator.apply(TerminalDisplay.clipped(row.text, columns: width))]
             case .content:
-                guard let cell = row.old ?? row.new else { return [] }
-                let old = row.old.map { String($0.line) } ?? "-"
-                let new = row.new.map { String($0.line) } ?? "-"
-                let lhs = String(repeating: " ", count: max(0, numberWidth - old.count)) + old
-                let rhs = String(repeating: " ", count: max(0, numberWidth - new.count)) + new
-                let marker = cell.role == .delete ? "-" : (cell.role == .insert ? "+" : " ")
-                let physical = TerminalDifferenceCell.make(
-                    cell, width: width, prefix: " \(lhs):\(rhs) \(marker) ",
-                    style: options.style, tabWidth: tab, wrap: options.wrap
-                )
-                return physical.lines.map { $0.render() }
+                return unifiedCells(row).flatMap { cell -> [String] in
+                    let old = cell.role == .insert ? "-" : String(row.old?.line ?? cell.line)
+                    let new = cell.role == .delete ? "-" : String(row.new?.line ?? cell.line)
+                    let lhs = String(repeating: " ", count: max(0, numberWidth - old.count)) + old
+                    let rhs = String(repeating: " ", count: max(0, numberWidth - new.count)) + new
+                    let marker = cell.role == .delete ? "-" : (cell.role == .insert ? "+" : " ")
+                    let physical = TerminalDifferenceCell.make(
+                        cell, width: width, prefix: " \(lhs):\(rhs) \(marker) ",
+                        style: options.style, tabWidth: tab, wrap: options.wrap
+                    )
+                    return physical.lines.map { $0.render() }
+                }
             }
         }
         return lines.joined(separator: "\n")

@@ -170,6 +170,46 @@ enum TerminalDifferenceSmoke {
         guard !geoRows.isEmpty, geoRows.allSatisfy({ TerminalDisplay.width(of: $0) == 64 }) else {
             throw Failure.incorrectRowCount
         }
+        // The parent allocates a region: neither review nor legacy lines
+        // may exceed it, even when that region is extremely narrow.
+        for columns in [2, 8, 11, 23, 40, 64] {
+            let region = TerminalRegion(rows: 20, columns: columns)
+            let bounded = TerminalDifferenceRenderOptions(
+                base: splitOptions,
+                style: .filled
+            ).constrained(to: region)
+            let review = TerminalDifferenceRenderer.render(split, options: bounded)
+            let legacy = TerminalDifferenceRenderer.render(layout, options: bounded)
+            guard (review + "\n" + legacy)
+                .components(separatedBy: "\n")
+                .allSatisfy({ TerminalDisplay.width(of: $0) <= columns }) else {
+                throw Failure.incorrectRowCount
+            }
+        }
+        let threshold74 = TerminalDifferenceRenderer.render(
+            splitSource,
+            options: TerminalDifferenceRenderOptions.review.constrained(
+                to: TerminalRegion(rows: 20, columns: 74)
+            )
+        )
+        let threshold75 = TerminalDifferenceRenderer.render(
+            splitSource,
+            options: TerminalDifferenceRenderOptions.review.constrained(
+                to: TerminalRegion(rows: 20, columns: 75)
+            )
+        )
+        guard !threshold74.contains("│"), threshold75.contains("│") else {
+            throw Failure.incorrectRowCount
+        }
+        let narrowPair = TerminalDifferenceRenderer.render(
+            split,
+            options: TerminalDifferenceRenderOptions(
+                base: splitOptions
+            ).constrained(to: TerminalRegion(rows: 20, columns: 23))
+        )
+        guard narrowPair.contains("30"), narrowPair.contains("45") else {
+            throw Failure.incorrectRowCount
+        }
         let padded = TerminalDifferenceRenderer.render(
             split, options: .init(base: splitOptions, width: .content(padding: 2, limit: 80))
         )

@@ -148,7 +148,7 @@ private extension TerminalDifferenceRenderer {
         options: TerminalDifferenceRenderOptions
     ) -> String {
         let safe = graphSafeText(content)
-        guard let columns = options.columns else {
+        guard let columns = options.constrainedColumns else {
             return style.apply(safe)
         }
         return TerminalTextLayout(text: safe, columns: columns)

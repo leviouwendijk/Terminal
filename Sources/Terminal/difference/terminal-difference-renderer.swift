@@ -178,6 +178,33 @@ public struct TerminalDifferenceRenderOptions: Sendable, Hashable {
         self.presentation = presentation
         self.show_movement_reasons = show_movement_reasons
     }
+
+    /// Resolve layout at the actual space assigned by the parent view.
+    /// Keep legacy `columns` in sync until all consumers migrate to `width`.
+    public func constrained(to region: TerminalRegion) -> Self {
+        var result = self
+        let columns = max(1, region.columns)
+        result.width = .fixed(columns)
+        result.columns = columns
+        return result
+    }
+
+    /// A single effective bound for legacy, tree, graph, and review paths.
+    /// The content policy has no natural-width requirement for those paths,
+    /// so it exposes its maximum available width here.
+    var constrainedColumns: Int? {
+        switch width {
+        case .fixed(let value):
+            return max(1, value)
+        case .terminal:
+            return max(1, Terminal.size(for: .standardOutput).columns)
+        case .content(_, let limit):
+            let terminal = max(1, Terminal.size(for: .standardOutput).columns)
+            return min(terminal, max(1, limit ?? terminal))
+        case nil:
+            return columns.map { max(1, $0) }
+        }
+    }
 }
 
 public enum TerminalDifferenceRenderer {
@@ -234,22 +261,13 @@ public enum TerminalDifferenceRenderer {
         render(
             DifferenceRenderPlan.make(layout, options: options.base),
             style: options.presentation == .plain ? .plain : options.style,
-            columns: options.columns
+            columns: options.constrainedColumns
         )
     }
 
     private static func reviewWidth(_ options: TerminalDifferenceRenderOptions) -> Int {
-        let terminal = max(1, Terminal.size(for: .standardOutput).columns)
-        switch options.width {
-        case .terminal:
-            return terminal
-        case .fixed(let value):
-            return max(1, value)
-        case .content(_, let limit):
-            return min(terminal, max(1, limit ?? terminal))
-        case nil:
-            return max(1, options.columns ?? terminal)
-        }
+        options.constrainedColumns
+            ?? max(1, Terminal.size(for: .standardOutput).columns)
     }
 
     public static func print(
@@ -349,7 +367,7 @@ public enum TerminalDifferenceRenderer {
             return rowStyle.apply(content)
         }
 
-        return line.segments
+        let rendered = line.segments
             .map {
                 segmentStyle(
                     $0,
@@ -360,9 +378,10 @@ public enum TerminalDifferenceRenderer {
                     $0.text
                 )
             }
-            .joined(
-                separator: spacing
-            )
+            .joined(separator: spacing)
+        return columns.map {
+            TerminalDisplay.clipped(rendered, columns: $0)
+        } ?? rendered
     }
 
     private static func rowStyle(

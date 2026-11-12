@@ -18,7 +18,7 @@ public extension TerminalDifferenceRenderer {
             layout,
             show_movement_reasons: options.show_movement_reasons
         )
-        return plan.lines.map { line in
+        let physical = plan.lines.map { line in
             let change_style = treeStyle(for: line.change, style: options.style)
             return line.segments.map { segment in
                 switch segment.component {
@@ -32,6 +32,12 @@ public extension TerminalDifferenceRenderer {
                     return options.style.separator.apply(segment.text)
                 }
             }.joined()
+        }
+        guard let columns = options.constrainedColumns else {
+            return physical.joined(separator: "\n")
+        }
+        return physical.map {
+            TerminalDisplay.clipped($0, columns: columns)
         }.joined(separator: "\n")
     }
 
