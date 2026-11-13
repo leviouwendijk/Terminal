@@ -1,5 +1,5 @@
 {
-  "originHash" : "3a8d877415c3ad2e0ec53e5eac9678681d3aaa255aae6b7a4ec31a9dcc974a70",
+  "originHash" : "3a5bf770b960208ce6552353d85e295f3940864040d306b91cdd8528d11c1130",
   "pins" : [
     {
       "identity" : "ansi",
@@ -43,7 +43,7 @@
       "location" : "https://github.com/leviouwendijk/Difference",
       "state" : {
         "branch" : "master",
-        "revision" : "1daf7c387319f69d97750605d49fba443d0326c9"
+        "revision" : "615158c50130785c3e5934d6210ecf447134ca3b"
       }
     },
     {
@@ -133,7 +133,7 @@
       "location" : "https://github.com/leviouwendijk/Primitives.git",
       "state" : {
         "branch" : "master",
-        "revision" : "2a1996970e4549ab110ffa72f654560a72ad2ca7"
+        "revision" : "5e64f0cf4dfe5ec5b793a7dd393e45bc70003cec"
       }
     },
     {
@@ -202,10 +202,10 @@
     {
       "identity" : "tokens",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/leviouwendijk/Tokens.git",
+      "location" : "https://github.com/leviouwendijk/Tokens",
       "state" : {
         "branch" : "master",
-        "revision" : "4e6c16afcaa81606fa7b2dcd80f9a25965403687"
+        "revision" : "6c36483226bfaecd544b8faba1f86215b3e9dce5"
       }
     }
   ],

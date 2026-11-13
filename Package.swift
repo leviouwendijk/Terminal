@@ -25,6 +25,14 @@ let package = Package(
             name: "TerminalGraph",
             targets: ["TerminalGraph"]
         ),
+        .library(
+            name: "TerminalGhostty",
+            targets: ["TerminalGhostty"]
+        ),
+        .executable(
+            name: "t_terminal_ghostty",
+            targets: ["TerminalGhosttyTestFlows"]
+        ),
         .executable(
             name: "termtest",
             targets: [
@@ -61,6 +69,22 @@ let package = Package(
         .package(url: "https://github.com/leviouwendijk/Clipboard", branch: "master"),
     ],
     targets: [
+        .binaryTarget(
+            name: "GhosttyVt",
+            url: "https://release.files.ghostty.org/libghostty-vt/1.0.1/ghostty-vt-1.0.1.xcframework.zip",
+            checksum: "c0f9631277f726154c8f521954d17cdc41aac4626fc0df8cf925a19ee58e829b"
+        ),
+        .target(
+            name: "TerminalGhostty",
+            dependencies: ["GhosttyVt"]
+        ),
+        .executableTarget(
+            name: "TerminalGhosttyTestFlows",
+            dependencies: [
+                "Terminal",
+                "TerminalGhostty",
+            ]
+        ),
         .target(
             name: "Terminal",
             dependencies: [

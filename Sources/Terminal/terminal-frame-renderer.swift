@@ -16,15 +16,25 @@ public struct TerminalFrameRenderer:
         _ frame: TerminalFrame
     ) {
         Terminal.withOutputTransaction {
-            renderFrame(
-                frame
+            Terminal.write(
+                encode(frame),
+                to: stream
             )
+            Terminal.flush(stream)
         }
     }
 
-    private mutating func renderFrame(
+    /// Returns the VT sequence needed to advance from the previous frame.
+    /// Advances the renderer's frame cache without writing to a stream.
+    public mutating func encode(
         _ frame: TerminalFrame
-    ) {
+    ) -> String {
+        encodeFrame(frame)
+    }
+
+    private mutating func encodeFrame(
+        _ frame: TerminalFrame
+    ) -> String {
         let resolvedFrame = frame.resolved()
         let requiresFullRender = previousFrame.map {
             previous in
@@ -89,15 +99,8 @@ public struct TerminalFrameRenderer:
             )
         )
 
-        Terminal.write(
-            output.joined(),
-            to: stream
-        )
-        Terminal.flush(
-            stream
-        )
-
         previousFrame = resolvedFrame
+        return output.joined()
     }
 
     public mutating func invalidate() {
