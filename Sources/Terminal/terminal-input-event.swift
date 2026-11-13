@@ -6,6 +6,7 @@ public enum TerminalInputEvent:
     case key(TerminalKey)
     case keyStroke(TerminalKeyStroke)
     case paste(String)
+    case mouse(TerminalMouseEvent)
 
     public var keyStroke: TerminalKeyStroke? {
         switch self {
@@ -17,7 +18,7 @@ public enum TerminalInputEvent:
         case .keyStroke(let keyStroke):
             return keyStroke
 
-        case .paste:
+        case .paste, .mouse:
             return nil
         }
     }
@@ -34,6 +35,9 @@ public enum TerminalInputEvent:
             return .char(
                 text
             )
+
+        case .mouse:
+            return .unknown([])
         }
     }
 }

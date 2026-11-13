@@ -69,6 +69,8 @@ public final class TerminalSession: @unchecked Sendable {
         public var hideCursor: Bool
         public var useRawMode: Bool
         public var useBracketedPaste: Bool
+        /// Report wheel, button, and drag events using SGR coordinates.
+        public var useMouseTracking: Bool
         public var keyboardProtocol: TerminalKeyboardProtocol
         public var controlSignalBehavior: TerminalControlSignalBehavior
         public var restoreOnInterrupt: Bool
@@ -79,6 +81,7 @@ public final class TerminalSession: @unchecked Sendable {
             hideCursor: Bool = false,
             useRawMode: Bool = false,
             useBracketedPaste: Bool = false,
+            useMouseTracking: Bool = false,
             keyboardProtocol: TerminalKeyboardProtocol = .legacy,
             controlSignalBehavior: TerminalControlSignalBehavior = .signals,
             restoreOnInterrupt: Bool = true,
@@ -88,6 +91,7 @@ public final class TerminalSession: @unchecked Sendable {
             self.hideCursor = hideCursor
             self.useRawMode = useRawMode
             self.useBracketedPaste = useBracketedPaste
+            self.useMouseTracking = useMouseTracking
             self.keyboardProtocol = keyboardProtocol
             self.controlSignalBehavior = controlSignalBehavior
             self.restoreOnInterrupt = restoreOnInterrupt
@@ -163,6 +167,10 @@ public final class TerminalSession: @unchecked Sendable {
             )
         }
 
+        if options.useMouseTracking {
+            Terminal.write("\u{001B}[?1002l\u{001B}[?1006l", to: options.outputStream)
+        }
+
         if options.hideCursor {
             Terminal.showCursor(
                 on: options.outputStream
@@ -231,7 +239,8 @@ public final class TerminalSession: @unchecked Sendable {
                 disableBracketedPasteOnInterrupt:
                     options.useBracketedPaste,
                 popKeyboardProtocolOnInterrupt:
-                    options.keyboardProtocol == .kitty
+                    options.keyboardProtocol == .kitty,
+                disableMouseTrackingOnInterrupt: options.useMouseTracking
             )
 
         if options.useAlternateScreen {
@@ -253,6 +262,10 @@ public final class TerminalSession: @unchecked Sendable {
             Terminal.enableBracketedPaste(
                 on: options.outputStream
             )
+        }
+
+        if options.useMouseTracking {
+            Terminal.write("\u{001B}[?1006h\u{001B}[?1002h", to: options.outputStream)
         }
 
         if options.hideCursor {
@@ -354,6 +367,7 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
         let leaveAlternateScreenOnInterrupt: Bool
         let disableBracketedPasteOnInterrupt: Bool
         let popKeyboardProtocolOnInterrupt: Bool
+        let disableMouseTrackingOnInterrupt: Bool
     }
 
     private var entries: [Entry] = []
@@ -365,7 +379,8 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
         showCursorOnInterrupt: Bool,
         leaveAlternateScreenOnInterrupt: Bool,
         disableBracketedPasteOnInterrupt: Bool,
-        popKeyboardProtocolOnInterrupt: Bool
+        popKeyboardProtocolOnInterrupt: Bool,
+        disableMouseTrackingOnInterrupt: Bool
     ) -> UInt64 {
         let id = nextID
 
@@ -386,7 +401,8 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
                 disableBracketedPasteOnInterrupt:
                     disableBracketedPasteOnInterrupt,
                 popKeyboardProtocolOnInterrupt:
-                    popKeyboardProtocolOnInterrupt
+                    popKeyboardProtocolOnInterrupt,
+                disableMouseTrackingOnInterrupt: disableMouseTrackingOnInterrupt
             )
         )
 
@@ -434,6 +450,10 @@ private final class TerminalSessionInterruptState: @unchecked Sendable {
             }
 
         var sequence = "\u{001B}[0 q"
+
+        if entries.contains(where: { $0.disableMouseTrackingOnInterrupt }) {
+            sequence += "\u{001B}[?1002l\u{001B}[?1006l"
+        }
 
         if popKeyboardProtocolOnInterrupt {
             sequence += "\u{001B}[<u"

@@ -116,6 +116,10 @@ public struct TerminalKeyReader: Sendable {
             )
         }
 
+        if let mouse = TerminalMouseEvent.decode(sequence) {
+            return .mouse(mouse)
+        }
+
         if let keyStroke = decodeCSIUKeyStroke(
             sequence
         ) {

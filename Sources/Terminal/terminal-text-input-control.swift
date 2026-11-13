@@ -33,6 +33,9 @@ public struct TerminalTextInputControl:
         _ event: TerminalInputEvent
     ) -> TerminalTextInputEvent? {
         switch event {
+        case .mouse:
+            return nil
+
         case .key(let key):
             return handle(
                 key
