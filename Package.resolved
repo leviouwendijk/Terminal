@@ -1,5 +1,5 @@
 {
-  "originHash" : "3a5bf770b960208ce6552353d85e295f3940864040d306b91cdd8528d11c1130",
+  "originHash" : "8997dffb9cb9be1253bd8a10ee3d99254a658b6c981d4166dfe70bb5849e11f0",
   "pins" : [
     {
       "identity" : "ansi",
@@ -52,7 +52,7 @@
       "location" : "https://github.com/leviouwendijk/DSL",
       "state" : {
         "branch" : "master",
-        "revision" : "30ec6798f883b91f697d060bb001e0e4f7a09225"
+        "revision" : "b85a4fcf315dfa6c100b38adc7a9cdec15ad817f"
       }
     },
     {

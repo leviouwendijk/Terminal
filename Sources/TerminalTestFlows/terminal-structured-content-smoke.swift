@@ -11,6 +11,7 @@ enum TerminalStructuredContentSmoke {
         case rolePresentation
         case leakedRole
         case width
+        case table
     }
 
     static func run() throws {
@@ -20,6 +21,7 @@ enum TerminalStructuredContentSmoke {
         try recursion()
         try roles()
         try width()
+        try table()
         print(sample())
     }
 
@@ -156,6 +158,42 @@ enum TerminalStructuredContentSmoke {
 
         guard !fallback.contains(unknown.rawValue) else {
             throw Failure.leakedRole
+        }
+    }
+
+    private static func table() throws {
+        func cell(_ text: String) -> StructuredContent { .paragraph([.text(text)]) }
+        let table: StructuredContent = .table(
+            header: [cell("Tool"), cell("Bytes")],
+            rows: [
+                [cell("mutate_files"), cell("3022")],
+                [cell("read_file"), cell("640 bytes after core projection")],
+            ]
+        )
+        let renderer = TerminalStructuredContent.Renderer()
+
+        let aligned = renderer.rows(table, columns: 80).map(stripANSI)
+        guard aligned == [
+            "Tool         │ Bytes",
+            String(repeating: "─", count: 13) + "┼" + String(repeating: "─", count: 32),
+            "mutate_files │ 3022",
+            "read_file    │ 640 bytes after core projection",
+        ] else {
+            throw Failure.table
+        }
+
+        let wrapped = renderer.rows(table, columns: 30).map(stripANSI)
+        guard wrapped.allSatisfy({ TerminalDisplay.width(of: $0) <= 30 }),
+              wrapped.count > aligned.count,
+              wrapped.filter({ $0.contains("┼") }).count == 2 else {
+            throw Failure.table
+        }
+
+        let fields = renderer.rows(table, columns: 12).map(stripANSI)
+        guard fields.allSatisfy({ TerminalDisplay.width(of: $0) <= 12 }),
+              fields.first == "Tool:",
+              !fields.contains(where: { $0.contains("│") }) else {
+            throw Failure.table
         }
     }
 

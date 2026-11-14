@@ -120,6 +120,112 @@ private extension TerminalStructuredContent.Renderer {
                 content: content,
                 columns: columns
             )
+
+        case .table(let header, let rows):
+            return tableRows(header: header, rows: rows, columns: columns)
+        }
+    }
+
+    /// Aligned columns when they fit; wide columns wrap down to
+    /// `minimumColumnWidth`; past that, each row is shown as fields.
+    func tableRows(
+        header: [StructuredContent],
+        rows: [[StructuredContent]],
+        columns: Int
+    ) -> [String] {
+        let style = format.block.table
+        let count = ([header] + rows).map(\.count).max() ?? 0
+        guard count > 0 else { return [] }
+
+        let header = header.map(strong)
+        let all = [header] + rows
+        let separatorWidth = TerminalDisplay.width(of: style.separator)
+        let available = columns - separatorWidth * (count - 1)
+        let natural = (0..<count).map { column in
+            all.map { row in
+                cellRows(row, column, columns: max(1, available))
+                    .map(TerminalDisplay.width)
+                    .max() ?? 0
+            }.max() ?? 0
+        }
+        let minimums = natural.map { min($0, style.minimumColumnWidth) }
+
+        guard minimums.reduce(0, +) <= available else {
+            return fieldRows(header: header, rows: rows, count: count, columns: columns)
+        }
+
+        var widths = natural
+        while widths.reduce(0, +) > available,
+              let widest = widths.indices
+                .filter({ widths[$0] > minimums[$0] })
+                .max(by: { widths[$0] < widths[$1] })
+        {
+            widths[widest] -= 1
+        }
+
+        let separator = style.borderStyle.apply(style.separator)
+        func lines(_ row: [StructuredContent]) -> [String] {
+            let cells = widths.indices.map { cellRows(row, $0, columns: widths[$0]) }
+            let height = cells.map(\.count).max() ?? 0
+            return (0..<max(1, height)).map { line in
+                widths.indices.map { column -> String in
+                    let text = cells[column].indices.contains(line) ? cells[column][line] : ""
+                    guard column < count - 1 else { return text }
+                    let padding = widths[column] - TerminalDisplay.width(of: text)
+                    return text + String(repeating: " ", count: max(0, padding))
+                }.joined(separator: separator)
+            }
+        }
+
+        let rule = style.borderStyle.apply(
+            widths.map { String(repeating: style.rule, count: $0) }
+                .joined(separator: style.junction)
+        )
+        let body = rows.map(lines)
+        let ruled = body.contains { $0.count > 1 }
+        var result = lines(header) + [rule]
+        for (index, row) in body.enumerated() {
+            if ruled, index > 0 { result.append(rule) }
+            result += row
+        }
+        return result
+    }
+
+    func cellRows(_ row: [StructuredContent], _ column: Int, columns: Int) -> [String] {
+        guard row.indices.contains(column) else { return [] }
+        return renderRows(row[column], columns: columns)
+    }
+
+    /// Each row as `header: value` lines, rows separated by a blank line.
+    func fieldRows(
+        header: [StructuredContent],
+        rows: [[StructuredContent]],
+        count: Int,
+        columns: Int
+    ) -> [String] {
+        joined(
+            rows.map { row in
+                (0..<count).flatMap { column -> [String] in
+                    let label = header.indices.contains(column) ? header[column] : .collection([])
+                    let value = row.indices.contains(column) ? row[column] : .collection([])
+                    if case .paragraph(let title) = label, case .paragraph(let content) = value {
+                        return renderRows(.paragraph(title + [.text(": ")] + content), columns: columns)
+                    }
+                    return renderRows(.collection([label, value]), columns: columns)
+                }
+            },
+            spacing: format.block.collection.spacing
+        )
+    }
+
+    func strong(_ content: StructuredContent) -> StructuredContent {
+        switch content {
+        case .paragraph(let inline):
+            return .paragraph([.strong(inline)])
+        case .collection(let children):
+            return .collection(children.map(strong))
+        default:
+            return content
         }
     }
 

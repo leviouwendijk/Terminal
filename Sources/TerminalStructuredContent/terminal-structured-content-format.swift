@@ -47,6 +47,7 @@ public extension TerminalStructuredContent.Format {
         public var quote: Quote
         public var list: List
         public var group: Group
+        public var table: Table
 
         public init(
             collection: Collection = .init(),
@@ -54,7 +55,8 @@ public extension TerminalStructuredContent.Format {
             code: Code = .init(),
             quote: Quote = .init(),
             list: List = .init(),
-            group: Group = .init()
+            group: Group = .init(),
+            table: Table = .init()
         ) {
             self.collection = collection
             self.paragraph = paragraph
@@ -62,6 +64,36 @@ public extension TerminalStructuredContent.Format {
             self.quote = quote
             self.list = list
             self.group = group
+            self.table = table
+        }
+    }
+}
+
+public extension TerminalStructuredContent.Format.Block {
+    struct Table: Sendable, Hashable {
+        /// Between cells of a row.
+        public var separator: String
+        /// Under the header; where `separator` meets the rule. Same width
+        /// as `separator`.
+        public var junction: String
+        public var rule: Character
+        public var borderStyle: TerminalStyle
+        /// Columns narrower than this wrap no further; a table that cannot
+        /// fit its columns at this width is shown row by row as fields.
+        public var minimumColumnWidth: Int
+
+        public init(
+            separator: String = " │ ",
+            junction: String = "─┼─",
+            rule: Character = "─",
+            borderStyle: TerminalStyle = .dim,
+            minimumColumnWidth: Int = 6
+        ) {
+            self.separator = separator
+            self.junction = junction
+            self.rule = rule
+            self.borderStyle = borderStyle
+            self.minimumColumnWidth = max(1, minimumColumnWidth)
         }
     }
 }
