@@ -171,6 +171,7 @@ let package = Package(
                     package: "Difference"
                 ),
                 .product(name: "Tokens", package: "Tokens"),
+                .product(name: "Primitives", package: "Primitives"),
             ]
         ),
     ]
