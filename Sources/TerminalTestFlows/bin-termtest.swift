@@ -51,6 +51,7 @@ struct TerminalTest {
                 try TerminalStructuredDifferenceSmoke.run()
                 try TerminalGraphDifferenceSmoke.run()
                 try TerminalTreeListSmoke.run()
+                try TerminalSettingsTreeSmoke.run()
             case .keys:
                 try TerminalInteractiveSmoke.runKeyProbe()
 

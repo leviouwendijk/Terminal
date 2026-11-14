@@ -45,6 +45,8 @@ public struct TerminalTreeList<ID: Hashable & Sendable>: Sendable {
     public enum Event: Sendable, Equatable {
         /// Enter on a leaf.
         case activated(ID)
+        /// Space on a leaf, e.g. a second switch beside Enter's.
+        case toggled(ID)
         case queryChanged(String)
     }
 
@@ -103,6 +105,20 @@ public struct TerminalTreeList<ID: Hashable & Sendable>: Sendable {
         }
         let leaves = rows.filter { !$0.isBranch }.count
         return "/\(query)  ·  \(leaves) \(leaves == 1 ? "match" : "matches")  ·  Esc clears"
+    }
+
+    /// The items above `id`, outermost first.
+    public func ancestors(
+        of id: ID
+    ) -> [TerminalTreeListItem<ID>] {
+        var nodes = tree.roots
+        var result: [TerminalTreeListItem<ID>] = []
+        for ancestor in Self.path(to: id, in: tree.roots) ?? [] {
+            guard let node = nodes.first(where: { $0.value.id == ancestor }) else { break }
+            result.append(node.value)
+            nodes = node.children
+        }
+        return result
     }
 
     /// Selects an item, expanding its ancestors.
@@ -194,8 +210,8 @@ public struct TerminalTreeList<ID: Hashable & Sendable>: Sendable {
                     collapsed.remove(row.item.id)
                 }
                 rebuild()
-            } else if key == .enter {
-                return .activated(row.item.id)
+            } else {
+                return key == .enter ? .activated(row.item.id) : .toggled(row.item.id)
             }
         case .char("/"):
             isEditingQuery = true
@@ -213,7 +229,8 @@ public struct TerminalTreeList<ID: Hashable & Sendable>: Sendable {
     /// Indented rows in `region`, scrolled to keep the cursor visible.
     public mutating func render(
         into frame: inout TerminalFrame,
-        in region: TerminalRegion
+        in region: TerminalRegion,
+        zIndex: TerminalZIndex = .base
     ) {
         guard region.rows > 0, region.columns > 0 else {
             return
@@ -241,7 +258,7 @@ public struct TerminalTreeList<ID: Hashable & Sendable>: Sendable {
                 : row.item.style.apply(plain)
             return TerminalDisplay.clipped(title + TerminalStyle.dim.apply(detail), columns: region.columns)
         }
-        frame.write(Array(lines), in: region)
+        frame.write(Array(lines), in: region, zIndex: zIndex)
     }
 
     /// Case-insensitive subsequence match; contiguous and earlier matches
