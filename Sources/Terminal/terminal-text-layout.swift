@@ -1,3 +1,18 @@
+import Primitives
+
+public enum TerminalTextWrapMode:
+    Sendable,
+    Codable,
+    Hashable
+{
+    /// Break at hard column boundaries (the historical behavior).
+    case character
+
+    /// Break at word boundaries where possible, falling back to hard breaks
+    /// for words wider than the column limit.
+    case word
+}
+
 public struct TerminalTextLayoutRow:
     Sendable,
     Hashable
@@ -136,7 +151,8 @@ public struct TerminalTextLayout:
     public init(
         text: String,
         columns: Int,
-        tabWidth: Int = 4
+        tabWidth: Int = 4,
+        wrapMode: TerminalTextWrapMode = .character
     ) {
         let columns = max(
             1,
@@ -149,6 +165,29 @@ public struct TerminalTextLayout:
         let characters = Array(
             text
         )
+
+        // Word-boundary offsets reuse Primitives word-segmentation so that
+        // wrapping never splits identifiers on case transitions or
+        // punctuation; only whitespace (space) separator segments are treated
+        // as break opportunities. Offsets are translated from UTF-8 to
+        // character indices to stay consistent with the row builder.
+        var spaceCharacterOffsets: Set<Int> = []
+        if wrapMode == .word {
+            let separatorUTF8 = Set(
+                Case.segments(text, separators: .space).compactMap { segment in
+                    segment.kind == .separator
+                        ? segment.utf8.lowerBound
+                        : nil
+                }
+            )
+            var utf8Cursor = 0
+            for (index, character) in characters.enumerated() {
+                if separatorUTF8.contains(utf8Cursor) {
+                    spaceCharacterOffsets.insert(index)
+                }
+                utf8Cursor += String(character).utf8.count
+            }
+        }
         var rows: [TerminalTextLayoutRow] = []
         var positions = Array(
             repeating: TerminalTextPosition(
@@ -166,6 +205,13 @@ public struct TerminalTextLayout:
             0,
         ]
         var currentColumns = 0
+        var rowEntries: [
+            (
+                sourceOffset: Int,
+                display: String,
+                displayColumns: Int
+            )
+        ] = []
 
         func appendRow(
             endOffset: Int
@@ -179,6 +225,7 @@ public struct TerminalTextLayout:
                     columnOffsets: columnOffsets
                 )
             )
+            rowEntries = []
             rowIndex += 1
             isSourceLineStart = false
             content = ""
@@ -188,7 +235,8 @@ public struct TerminalTextLayout:
             currentColumns = 0
         }
 
-        for offset in characters.indices {
+        var offset = 0
+        while offset < characters.count {
             let character = characters[offset]
 
             if character == "\n" {
@@ -206,6 +254,7 @@ public struct TerminalTextLayout:
                     row: rowIndex,
                     column: 0
                 )
+                offset += 1
                 continue
             }
 
@@ -221,22 +270,69 @@ public struct TerminalTextLayout:
             if currentColumns > 0,
                currentColumns + displayColumns > columns
             {
-                appendRow(
-                    endOffset: offset
-                )
-                rowStart = offset
-                positions[offset] = TerminalTextPosition(
-                    row: rowIndex,
-                    column: 0
-                )
-                display = Self.display(
-                    character,
-                    column: 0,
-                    tabWidth: tabWidth
-                )
-                displayColumns = TerminalDisplay.width(
-                    of: display
-                )
+                var spaceOffset: Int?
+                if wrapMode == .word {
+                    for candidate in stride(
+                        from: offset - 1,
+                        through: rowStart,
+                        by: -1
+                    ) where spaceCharacterOffsets.contains(candidate) {
+                        spaceOffset = candidate
+                        break
+                    }
+                }
+
+                if let spaceOffset {
+                    // Word-wrap: break at the most recent space boundary so the
+                    // word being overflowed moves to the next row intact rather
+                    // than being split mid-word.
+                    let newRowEnd = spaceOffset + 1
+
+                    // Trim this row back to end right after the space.
+                    while let last = rowEntries.last,
+                          last.sourceOffset > spaceOffset {
+                        rowEntries.removeLast()
+                    }
+                    content = ""
+                    columnOffsets = [
+                        0,
+                    ]
+                    currentColumns = 0
+                    for entry in rowEntries {
+                        content += entry.display
+                        currentColumns += entry.displayColumns
+                        columnOffsets.append(
+                            currentColumns
+                        )
+                    }
+                    appendRow(
+                        endOffset: newRowEnd
+                    )
+                    rowStart = newRowEnd
+
+                    // Reprocess moved characters through normal placement:
+                    // tabs may grow at their new columns and overflow again.
+                    offset = newRowEnd
+                    continue
+                } else {
+                    // No word boundary available: hard-break mid-word.
+                    appendRow(
+                        endOffset: offset
+                    )
+                    rowStart = offset
+                    positions[offset] = TerminalTextPosition(
+                        row: rowIndex,
+                        column: 0
+                    )
+                    display = Self.display(
+                        character,
+                        column: 0,
+                        tabWidth: tabWidth
+                    )
+                    displayColumns = TerminalDisplay.width(
+                        of: display
+                    )
+                }
             } else {
                 positions[offset] = TerminalTextPosition(
                     row: rowIndex,
@@ -257,10 +353,18 @@ public struct TerminalTextLayout:
             columnOffsets.append(
                 currentColumns
             )
+            rowEntries.append(
+                (
+                    sourceOffset: offset,
+                    display: display,
+                    displayColumns: displayColumns
+                )
+            )
             positions[offset + 1] = TerminalTextPosition(
                 row: rowIndex,
                 column: currentColumns
             )
+            offset += 1
         }
 
         rows.append(
