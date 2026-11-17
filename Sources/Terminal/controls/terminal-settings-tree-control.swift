@@ -55,6 +55,8 @@ public struct TerminalSettingsTreeControl<ID: Hashable & Sendable>: Sendable {
     /// Shown above the rows while the current row is under one of these.
     public var legends: [ID: String]
     public var instructions: String
+    /// A pending count or `g`, shown in place of the instructions.
+    public var pendingText: String?
 
     public init(
         title: String,
@@ -143,6 +145,15 @@ public struct TerminalSettingsTreeControl<ID: Hashable & Sendable>: Sendable {
         }
     }
 
+    /// Counted or absolute movement over the rows; horizontal steps fold.
+    public mutating func apply(
+        _ command: TerminalNavigationCommand
+    ) {
+        let before = list.cursor
+        list.apply(command)
+        if list.cursor != before { detailOffset = 0 }
+    }
+
     public mutating func render(
         into frame: inout TerminalFrame,
         in region: TerminalRegion,
@@ -187,7 +198,7 @@ public struct TerminalSettingsTreeControl<ID: Hashable & Sendable>: Sendable {
         )
         renderDetail(into: &frame, in: layout[3], theme: theme)
         frame.write(
-            theme.caption.apply(list.statusLine ?? instructions),
+            theme.caption.apply(list.statusLine ?? pendingText ?? instructions),
             in: layout[4],
             zIndex: .overlay
         )

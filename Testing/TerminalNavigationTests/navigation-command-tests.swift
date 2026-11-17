@@ -118,5 +118,14 @@ enum NavigationCommandTests {
             list.apply(.horizontal(2), pageRows: 10)
             try Expect.equal(list.cursor, "a1", "2l expands then enters")
         }
+
+        Test("tree pages by the rows it last rendered") { _ in
+            var list = tree()
+            var frame = TerminalFrame(rows: 3, columns: 20)
+            list.render(into: &frame, in: TerminalRegion(rows: 3, columns: 20))
+            try Expect.equal(list.visibleRows, 3, "rendered rows")
+            list.apply(.page(1))
+            try Expect.equal(list.cursor, "a2", "one page is rows - 1")
+        }
     }
 }

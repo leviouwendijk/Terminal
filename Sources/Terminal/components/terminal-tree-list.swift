@@ -63,6 +63,8 @@ public struct TerminalTreeList<ID: Hashable & Sendable>: Sendable {
     public private(set) var query: String = ""
     public private(set) var isEditingQuery = false
     public private(set) var rows: [Row] = []
+    /// Rows shown by the last render: one page for counted navigation.
+    public private(set) var visibleRows = 1
     private var scroll = 0
     private let matcher: Matcher
 
@@ -235,6 +237,7 @@ public struct TerminalTreeList<ID: Hashable & Sendable>: Sendable {
         guard region.rows > 0, region.columns > 0 else {
             return
         }
+        visibleRows = region.rows
         let index = rows.firstIndex { $0.item.id == cursor } ?? 0
         if index < scroll {
             scroll = index
@@ -388,6 +391,16 @@ private extension TerminalTreeList {
 extension TerminalTreeList {
     /// Moves the cursor over visible rows. Horizontal steps repeat the tree's
     /// collapse/parent and expand/child moves until nothing changes.
+    @discardableResult
+    public mutating func apply(
+        _ command: TerminalNavigationCommand
+    ) -> Event? {
+        apply(
+            command,
+            pageRows: visibleRows
+        )
+    }
+
     @discardableResult
     public mutating func apply(
         _ command: TerminalNavigationCommand,
