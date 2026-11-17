@@ -123,6 +123,8 @@ let package = Package(
             dependencies: [
                 "Terminal",
                 "TerminalStructuredContent",
+                "TerminalGraph",
+                .product(name: "Primitives", package: "Primitives"),
                 .product(name: "Reporting", package: "Reporting"),
                 .product(name: "Search", package: "Search"),
                 .product(name: "Math", package: "Math"),

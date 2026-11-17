@@ -103,6 +103,45 @@ struct TerminalReportingSmoke {
             blocks: [.chart(.init(dataset: "long", kind: .line, x: "x", y: "y"))]
         )
         try expect(renderer.render(longReport, columns: 12).contains("point19"), "No silent point omission")
+
+        // 2026-11-18 08:00 Europe/Amsterdam
+        let morning = Date(timeIntervalSince1970: 1_763_449_200)
+        let hour: TimeInterval = 3600
+        let leviSpans: [ReportBlock.Timeline.Span] = [
+            .init(start: morning, end: morning + hour, mark: .occupied, label: "Standup"),
+            .init(start: morning + 2 * hour, end: morning + 3 * hour, mark: .highlight, label: "Proposed"),
+            .init(start: morning + 6 * hour, end: morning + 8 * hour, mark: .reserved),
+        ]
+        let annaSpans: [ReportBlock.Timeline.Span] = [
+            .init(start: morning + hour, end: morning + 4 * hour, mark: .available),
+        ]
+        let timeline = ReportBlock.Timeline(
+            start: morning, end: morning + 10 * hour, timeZone: "Europe/Amsterdam",
+            lanes: [.init(label: "Levi", spans: leviSpans), .init(label: "Anna", spans: annaSpans)]
+        )
+        let facts = ReportBlock.Facts(facts: [.init("Recommended", "Tue 18 Nov 10:00–11:00"), .init("Placement", "offered")])
+        let callout = ReportBlock.Callout(tone: .warning, title: "Gaps", content: .paragraph([.text("No location given")]))
+        let graph = ReportBlock.Graph(
+            nodes: [.init(id: "a", label: "Request"), .init(id: "b", label: "Proposal")],
+            edges: [.init(id: "ab", source: "a", destination: "b", label: "resolves")]
+        )
+        let blocks = try ReportDocument(
+            title: "Proposal",
+            datasets: [],
+            blocks: [.facts(facts), .callout(callout), .timeline(timeline), .graph(graph)]
+        )
+        let rendered = renderer.render(blocks, columns: 72)
+        try expect(rendered.contains("Recommended") && rendered.contains("10:00–11:00"), "Facts")
+        try expect(rendered.contains("! Gaps") && rendered.contains("│ No location"), "Callout")
+        try expect(rendered.contains("08") && rendered.contains("12"), "Hour axis in the timeline's zone")
+        try expect(rendered.contains("▲") && rendered.contains("█") && rendered.contains("▒") && rendered.contains("░"), "Marks")
+        try expect(rendered.contains("10:00–11:00 highlight · Proposed"), "Labeled spans listed")
+        try expect(rendered.contains("Request") && rendered.contains("resolves"), "Graph block")
+        let levi = renderer.rows(blocks, columns: 72).first { $0.hasPrefix("Levi") && $0.contains("│") } ?? ""
+        try expect(levi.firstIndex(of: "▲")! > levi.firstIndex(of: "█")!, "Highlight after the standup")
+        for width in [10, 24, 40, 72] {
+            try expect(renderer.rows(blocks, columns: width).allSatisfy { TerminalDisplay.width(of: $0) <= width }, "Blocks fit width \(width)")
+        }
         print("TerminalReporting smoke: passed")
     }
 

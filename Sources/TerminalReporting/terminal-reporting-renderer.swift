@@ -37,6 +37,14 @@ public enum TerminalReporting {
                     } else {
                         section = textRows("Missing dataset: \(spec.dataset)", width: width)
                     }
+                case .facts(let facts):
+                    section = factsRows(facts, width: width)
+                case .callout(let callout):
+                    section = calloutRows(callout, width: width)
+                case .timeline(let timeline):
+                    section = timelineRows(timeline, width: width)
+                case .graph(let graph):
+                    section = graphRows(graph, width: width)
                 }
                 if !section.isEmpty {
                     if !result.isEmpty { result.append("") }
