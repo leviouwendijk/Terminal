@@ -1,5 +1,3 @@
-import Primitives
-
 public enum TerminalTextWrapMode:
     Sendable,
     Codable,
@@ -166,28 +164,9 @@ public struct TerminalTextLayout:
             text
         )
 
-        // Word-boundary offsets reuse Primitives word-segmentation so that
-        // wrapping never splits identifiers on case transitions or
-        // punctuation; only whitespace (space) separator segments are treated
-        // as break opportunities. Offsets are translated from UTF-8 to
-        // character indices to stay consistent with the row builder.
-        var spaceCharacterOffsets: Set<Int> = []
-        if wrapMode == .word {
-            let separatorUTF8 = Set(
-                Case.segments(text, separators: .space).compactMap { segment in
-                    segment.kind == .separator
-                        ? segment.utf8.lowerBound
-                        : nil
-                }
-            )
-            var utf8Cursor = 0
-            for (index, character) in characters.enumerated() {
-                if separatorUTF8.contains(utf8Cursor) {
-                    spaceCharacterOffsets.insert(index)
-                }
-                utf8Cursor += String(character).utf8.count
-            }
-        }
+        // Word wrapping breaks only after spaces and tabs, so identifiers and
+        // paths are never split on case transitions or punctuation.
+        let wrapsWords = wrapMode == .word
         var rows: [TerminalTextLayoutRow] = []
         var positions = Array(
             repeating: TerminalTextPosition(
@@ -267,17 +246,59 @@ public struct TerminalTextLayout:
                 of: display
             )
 
+            if wrapsWords,
+               currentColumns > 0,
+               Self.isBreak(character),
+               currentColumns + displayColumns > columns
+            {
+                // The word before this blank already fits: the blank (and any
+                // blanks after it) hang at the end of the row with zero width
+                // instead of starting the next row.
+                while offset < characters.count,
+                      Self.isBreak(characters[offset])
+                {
+                    positions[offset] = TerminalTextPosition(
+                        row: rowIndex,
+                        column: currentColumns
+                    )
+                    columnOffsets.append(
+                        currentColumns
+                    )
+                    offset += 1
+                }
+                // A newline ends this row itself.
+                if offset < characters.count,
+                   characters[offset] == "\n"
+                {
+                    continue
+                }
+                appendRow(
+                    endOffset: offset
+                )
+                rowStart = offset
+                positions[offset] = TerminalTextPosition(
+                    row: rowIndex,
+                    column: 0
+                )
+                continue
+            }
+
             if currentColumns > 0,
                currentColumns + displayColumns > columns
             {
                 var spaceOffset: Int?
-                if wrapMode == .word {
+                if wrapsWords {
+                    // Only a blank that follows visible text on this row is a
+                    // break; breaking inside leading indentation would leave a
+                    // row of nothing but blanks.
                     for candidate in stride(
                         from: offset - 1,
                         through: rowStart,
                         by: -1
-                    ) where spaceCharacterOffsets.contains(candidate) {
-                        spaceOffset = candidate
+                    ) where Self.isBreak(characters[candidate]) {
+                        if characters[rowStart..<candidate].contains(where: { !Self.isBreak($0) }) {
+                            spaceOffset = candidate
+                        }
                         break
                     }
                 }
@@ -397,6 +418,12 @@ public struct TerminalTextLayout:
         )
 
         return cursorPositions[offset]
+    }
+
+    private static func isBreak(
+        _ character: Character
+    ) -> Bool {
+        character == " " || character == "\t"
     }
 
     private static func display(
