@@ -94,6 +94,9 @@ public enum TerminalReporting {
                     lines.count == 1 || sizes[index] < 12
                         ? lines.flatMap { Self.wrap($0, width: sizes[index]) }
                         : lines.flatMap { line -> [String] in
+                            // A line that fits stays whole; only wrapped
+                            // continuations indent.
+                            guard TerminalDisplay.width(of: line) > sizes[index] else { return [line] }
                             let rows = Self.wrap(line, width: sizes[index] - 2)
                             return rows.prefix(1) + rows.dropFirst().map { "  " + $0 }
                         }
