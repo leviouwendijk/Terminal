@@ -142,6 +142,26 @@ struct TerminalReportingSmoke {
         for width in [10, 24, 40, 72] {
             try expect(renderer.rows(blocks, columns: width).allSatisfy { TerminalDisplay.width(of: $0) <= width }, "Blocks fit width \(width)")
         }
+        // A wide grid wraps inside its columns instead of turning into a list.
+        let grid = try ReportDataset(
+            id: "grid",
+            columns: [.init("✓", kind: .text), .init("Start", kind: .text), .init("Levi", kind: .text), .init("Trainer B", kind: .text)],
+            rows: [
+                .init(values: [.text("⚠"), .text("Thu 19 Nov 14:30–16:00"), .text("reserved 10:00–21:00\n11:00–12:30 o.v. Client C | Dog C"), .text("11:00–12:30 (6) Client A | Dog A [A]\n12:30–14:00 (9) Client B | Dog B [A]")]),
+                .init(values: [.text("✓"), .text("Sat 5 Dec 11:00–12:30"), .text("offered Slot 1"), .text("offered Slot 1")]),
+            ],
+            coverage: .complete
+        )
+        let gridReport = try ReportDocument(
+            title: "Grid", datasets: [grid],
+            blocks: [.table(.init(dataset: "grid", columns: ["✓", "Start", "Levi", "Trainer B"]))]
+        )
+        let gridRows = renderer.rows(gridReport, columns: 80)
+        try expect(gridRows.contains { $0.hasPrefix("✓") && $0.contains("Trainer B") }, "Header stays a header row")
+        try expect(!gridRows.contains { $0.hasPrefix("Levi:") }, "No vertical fallback at 80 columns")
+        try expect(gridRows.contains { $0.contains("12:30–14:00") }, "Each entry on its own line")
+        try expect(gridRows.allSatisfy { TerminalDisplay.width(of: $0) <= 80 }, "Grid fits")
+
         print("TerminalReporting smoke: passed")
     }
 

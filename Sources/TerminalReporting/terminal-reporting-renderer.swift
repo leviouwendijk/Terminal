@@ -71,33 +71,105 @@ public enum TerminalReporting {
             }
             guard !indices.isEmpty else { return output + ["(no columns selected)"] }
             let names = indices.map { clean(dataset.columns[$0].name) }
-            let values = dataset.rows.map { row in indices.map { display(row.values[$0]) } }
+            // Text cells keep their line breaks: several entries in one cell.
+            let values = dataset.rows.map { row in indices.map { cellLines(row.values[$0]) } }
             let gap = 2
-            let sizes = names.indices.map { column in
+            let natural = names.indices.map { column in
                 max(TerminalDisplay.width(of: names[column]),
-                    values.map { TerminalDisplay.width(of: $0[column]) }.max() ?? 0)
+                    values.flatMap { $0[column] }.map(TerminalDisplay.width(of:)).max() ?? 0)
             }
-            let required = sizes.reduce(0, +) + gap * (sizes.count - 1)
-            guard required <= width else {
-                return output + verticalTable(names: names, values: values, width: width)
+            guard let sizes = Self.fit(natural, width: width - gap * (natural.count - 1)) else {
+                return output + verticalTable(
+                    names: names,
+                    values: values.map { $0.map { $0.joined(separator: " · ") } },
+                    width: width
+                )
             }
             let numerical = indices.map { index in
                 [.integer, .decimal].contains(dataset.columns[index].kind)
             }
-            func row(_ cells: [String]) -> String {
-                cells.enumerated().map { index, cell in
-                    let padding = String(
-                        repeating: " ",
-                        count: max(0, sizes[index] - TerminalDisplay.width(of: cell))
-                    )
-                    return numerical[index] ? padding + cell : cell + padding
-                }.joined(separator: String(repeating: " ", count: gap))
+            func row(_ cells: [[String]]) -> [String] {
+                let wrapped = cells.enumerated().map { index, lines in
+                    // With several entries, an entry's wrapped lines indent.
+                    lines.count == 1 || sizes[index] < 12
+                        ? lines.flatMap { Self.wrap($0, width: sizes[index]) }
+                        : lines.flatMap { line -> [String] in
+                            let rows = Self.wrap(line, width: sizes[index] - 2)
+                            return rows.prefix(1) + rows.dropFirst().map { "  " + $0 }
+                        }
+                }
+                let height = wrapped.map(\.count).max() ?? 1
+                return (0..<max(height, 1)).map { line in
+                    wrapped.enumerated().map { index, lines in
+                        let cell = line < lines.count ? lines[line] : ""
+                        let padding = String(
+                            repeating: " ",
+                            count: max(0, sizes[index] - TerminalDisplay.width(of: cell))
+                        )
+                        return numerical[index] ? padding + cell : cell + padding
+                    }.joined(separator: String(repeating: " ", count: gap))
+                    .replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
+                }
             }
-            output.append(row(names))
-            output.append(row(sizes.map { String(repeating: "-", count: $0) }))
-            output += values.map(row)
+            let body = values.map(row)
+            output += row(names.map { [$0] })
+            output.append(sizes.map { String(repeating: "-", count: $0) }.joined(separator: String(repeating: " ", count: gap)))
+            // Rows that wrap are set apart, so each row reads as one.
+            let spaced = body.contains { $0.count > 1 }
+            for (index, lines) in body.enumerated() {
+                if spaced, index > 0 { output.append("") }
+                output += lines
+            }
             if values.isEmpty { output.append("(no rows)") }
             return output
+        }
+
+        /// Column widths within `width`: natural widths when they fit,
+        /// otherwise the widest columns shrink first to a common cap, so
+        /// short columns (a mark, a time) stay whole. Nil when the cap would
+        /// fall below a readable width.
+        static func fit(_ natural: [Int], width: Int) -> [Int]? {
+            if natural.reduce(0, +) <= width { return natural }
+            var cap = natural.max() ?? 0
+            while cap > 0, natural.map({ min($0, cap) }).reduce(0, +) > width { cap -= 1 }
+            guard cap >= 10 else { return nil }
+            var sizes = natural.map { min($0, cap) }
+            // Hand what is left to the clipped columns, one at a time.
+            var spare = width - sizes.reduce(0, +)
+            for index in sizes.indices where spare > 0 && sizes[index] < natural[index] {
+                sizes[index] += 1
+                spare -= 1
+            }
+            return sizes
+        }
+
+        /// Wraps at spaces; only a word longer than the column is cut.
+        static func wrap(_ line: String, width: Int) -> [String] {
+            guard TerminalDisplay.width(of: line) > width else { return [line] }
+            var rows: [String] = []
+            var current = ""
+            for word in line.split(separator: " ").map(String.init) {
+                let candidate = current.isEmpty ? word : current + " " + word
+                if TerminalDisplay.width(of: candidate) <= width {
+                    current = candidate
+                    continue
+                }
+                if !current.isEmpty { rows.append(current) }
+                current = word
+                while TerminalDisplay.width(of: current) > width {
+                    let cut = TerminalTextLayout(text: current, columns: width).rows.map(\.content)
+                    rows.append(cut.first ?? current)
+                    current = cut.dropFirst().joined()
+                }
+            }
+            if !current.isEmpty { rows.append(current) }
+            return rows
+        }
+
+        private func cellLines(_ value: StructuredValue?) -> [String] {
+            guard case .text(let text)? = value else { return [display(value)] }
+            let lines = text.split(separator: "\n", omittingEmptySubsequences: false).map { clean(String($0)) }
+            return lines.isEmpty ? [""] : lines
         }
 
         private func verticalTable(names: [String], values: [[String]], width: Int) -> [String] {
