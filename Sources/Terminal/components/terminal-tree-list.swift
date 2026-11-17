@@ -384,3 +384,69 @@ private extension TerminalTreeList {
         return nil
     }
 }
+
+extension TerminalTreeList {
+    /// Moves the cursor over visible rows. Horizontal steps repeat the tree's
+    /// collapse/parent and expand/child moves until nothing changes.
+    @discardableResult
+    public mutating func apply(
+        _ command: TerminalNavigationCommand,
+        pageRows: Int
+    ) -> Event? {
+        guard !isEditingQuery,
+              !rows.isEmpty else {
+            return nil
+        }
+
+        let index = rows.firstIndex { $0.item.id == cursor } ?? 0
+
+        switch command {
+        case .first:
+            cursor = rows.first?.item.id
+
+        case .last:
+            cursor = rows.last?.item.id
+
+        case .position(let position):
+            cursor = rows[
+                min(rows.count - 1, max(0, position))
+            ].item.id
+
+        case .horizontal(let steps):
+            let key: TerminalKey = steps < 0 ? .left : .right
+            var event: Event?
+            for _ in 0..<abs(
+                TerminalNavigationCommand.bounded(
+                    steps,
+                    to: rows.count
+                )
+            ) {
+                let before = (cursor, rows.count)
+                event = handle(key) ?? event
+                if before == (cursor, rows.count) {
+                    break
+                }
+            }
+            return event
+
+        case .vertical,
+             .page,
+             .halfPage:
+            guard let steps = command.verticalSteps(
+                pageRows: pageRows
+            ) else {
+                return nil
+            }
+
+            let bounded = TerminalNavigationCommand.bounded(
+                steps,
+                to: rows.count
+            )
+            cursor = rows[
+                min(rows.count - 1, max(0, index + bounded))
+            ].item.id
+        }
+
+        return nil
+    }
+}

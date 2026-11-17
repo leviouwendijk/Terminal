@@ -314,3 +314,117 @@ public struct TerminalListControl<
         )
     }
 }
+
+extension TerminalListControl {
+    /// Moves the current item. A single step keeps the list's wrap mode; counts,
+    /// pages and positions clamp. Disabled items are skipped and not counted.
+    public mutating func apply(
+        _ command: TerminalNavigationCommand,
+        pageRows: Int
+    ) -> TerminalListControlEvent<ID>? {
+        switch command {
+        case .vertical(let steps) where steps == 1 || steps == -1:
+            return handle(
+                steps < 0 ? .up : .down
+            )
+
+        case .first:
+            return handle(
+                .home
+            )
+
+        case .last:
+            return handle(
+                .end
+            )
+
+        case .horizontal:
+            return nil
+
+        case .position(let index):
+            return moveToEnabled(
+                near: index
+            )
+
+        case .vertical,
+             .page,
+             .halfPage:
+            guard let steps = command.verticalSteps(
+                pageRows: pageRows
+            ) else {
+                return nil
+            }
+
+            return moveClamped(
+                by: steps
+            )
+        }
+    }
+
+    private var enabledIndices: [Int] {
+        items.indices.filter { index in
+            enabledProvider(items[index])
+        }
+    }
+
+    private mutating func moveClamped(
+        by steps: Int
+    ) -> TerminalListControlEvent<ID>? {
+        let enabled = enabledIndices
+
+        guard !enabled.isEmpty else {
+            return nil
+        }
+
+        let current = currentIndex.flatMap { index in
+            enabled.firstIndex(of: index)
+        } ?? 0
+        let bounded = TerminalNavigationCommand.bounded(
+            steps,
+            to: enabled.count
+        )
+        let target = enabled[
+            min(
+                enabled.count - 1,
+                max(0, current + bounded)
+            )
+        ]
+
+        return select(
+            index: target
+        )
+    }
+
+    private mutating func moveToEnabled(
+        near index: Int
+    ) -> TerminalListControlEvent<ID>? {
+        let enabled = enabledIndices
+
+        guard !enabled.isEmpty else {
+            return nil
+        }
+
+        let target = enabled.first { $0 >= index }
+            ?? enabled[enabled.count - 1]
+
+        return select(
+            index: target
+        )
+    }
+
+    private mutating func select(
+        index: Int
+    ) -> TerminalListControlEvent<ID>? {
+        let previousID = currentID
+        let id = idProvider(items[index])
+
+        guard select(id: id),
+              id != previousID else {
+            return nil
+        }
+
+        return .currentChanged(
+            id
+        )
+    }
+}

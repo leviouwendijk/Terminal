@@ -55,6 +55,10 @@ let package = Package(
             name: "t_terminal_graph",
             targets: ["TerminalGraphTesting"]
         ),
+        .executable(
+            name: "t_terminal_navigation",
+            targets: ["TerminalNavigationTests"]
+        ),
     ],
     dependencies: [
         .package(url: "https://github.com/leviouwendijk/ANSI", branch: "master"),
@@ -67,6 +71,7 @@ let package = Package(
         .package(url: "https://github.com/leviouwendijk/Search.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Math.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Clipboard", branch: "master"),
+        .package(url: "https://github.com/leviouwendijk/Testing.git", branch: "master"),
     ],
     targets: [
         .binaryTarget(
@@ -149,6 +154,15 @@ let package = Package(
                 .product(name: "Math", package: "Math"),
                 .product(name: "DSL", package: "DSL"),
             ]
+        ),
+        .executableTarget(
+            name: "TerminalNavigationTests",
+            dependencies: [
+                "Terminal",
+                .product(name: "Primitives", package: "Primitives"),
+                .product(name: "Testing", package: "Testing"),
+            ],
+            path: "Testing/TerminalNavigationTests"
         ),
         .executableTarget(
             name: "TerminalDifferencePreview",

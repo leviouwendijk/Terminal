@@ -1,5 +1,5 @@
 {
-  "originHash" : "8997dffb9cb9be1253bd8a10ee3d99254a658b6c981d4166dfe70bb5849e11f0",
+  "originHash" : "f39ffba5cfedcd28366aeba5885aae8e1a282819b39ba24af3286184e91afb21",
   "pins" : [
     {
       "identity" : "ansi",
@@ -133,7 +133,7 @@
       "location" : "https://github.com/leviouwendijk/Primitives.git",
       "state" : {
         "branch" : "master",
-        "revision" : "5e64f0cf4dfe5ec5b793a7dd393e45bc70003cec"
+        "revision" : "89448ec3f266a70dfc755edd694cc7854d5419d6"
       }
     },
     {
@@ -160,7 +160,7 @@
       "location" : "https://github.com/leviouwendijk/Schema.git",
       "state" : {
         "branch" : "master",
-        "revision" : "a3b2d62e52cb7e061d5a5cdadb63f4d31684dd4d"
+        "revision" : "af9a4e2d0b5da1239f53b405a3e04e636dd489c4"
       }
     },
     {
@@ -205,7 +205,7 @@
       "location" : "https://github.com/leviouwendijk/Tokens",
       "state" : {
         "branch" : "master",
-        "revision" : "6c36483226bfaecd544b8faba1f86215b3e9dce5"
+        "revision" : "f14620970eb1b4d77ea4811c053a65cbd1b6f972"
       }
     }
   ],
