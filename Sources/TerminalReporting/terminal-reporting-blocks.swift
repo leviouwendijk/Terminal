@@ -152,11 +152,13 @@ struct TimelineAxis {
         end.timeIntervalSince(start) / Double(count)
     }
 
+    /// Marks differ by height, not shade: terminals paint shade glyphs as
+    /// flat tints, and full blocks in stacked lanes merge into one shape.
     static func glyph(_ mark: ReportBlock.Timeline.Mark) -> Character {
         switch mark {
-        case .occupied: "█"
-        case .reserved: "▒"
-        case .available: "░"
+        case .occupied: "▇"
+        case .reserved: "▁"
+        case .available: "▄"
         case .highlight: "▲"
         case .transit: "≈"
         }
@@ -206,6 +208,23 @@ struct TimelineAxis {
         }
 
         var line = Array(repeating: Character(" "), count: count + 1)
+        // Daily labels sit over their day's cells, the partial first day
+        // included, not at midnight left of the day's spans.
+        if !hourly, step == 86_400 {
+            var day = calendar.dateInterval(of: .day, for: start)?.start ?? start
+            while day < end {
+                let next = calendar.date(byAdding: .day, value: 1, to: day) ?? day.addingTimeInterval(86_400)
+                let first = Int((max(day, start).timeIntervalSince(start) / secondsPerCell).rounded())
+                let last = min(count, Int((min(next, end).timeIntervalSince(start) / secondsPerCell).rounded()))
+                let text = Array(format.string(from: day))
+                if last - first > text.count {
+                    let position = first + (last - first - text.count) / 2
+                    for (offset, character) in text.enumerated() { line[position + offset] = character }
+                }
+                day = next
+            }
+            return String(line).replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
+        }
         while tick < end {
             let position = Int((tick.timeIntervalSince(start) / secondsPerCell).rounded())
             let text = Array(format.string(from: tick))

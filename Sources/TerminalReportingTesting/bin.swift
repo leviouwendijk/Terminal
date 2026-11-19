@@ -134,11 +134,27 @@ struct TerminalReportingSmoke {
         try expect(rendered.contains("Recommended") && rendered.contains("10:00–11:00"), "Facts")
         try expect(rendered.contains("! Gaps") && rendered.contains("│ No location"), "Callout")
         try expect(rendered.contains("08") && rendered.contains("12"), "Hour axis in the timeline's zone")
-        try expect(rendered.contains("▲") && rendered.contains("█") && rendered.contains("▒") && rendered.contains("░"), "Marks")
+        try expect(rendered.contains("▲") && rendered.contains("▇") && rendered.contains("▁") && rendered.contains("▄"), "Marks")
         try expect(rendered.contains("10:00–11:00 highlight · Proposed"), "Labeled spans listed")
         try expect(rendered.contains("Request") && rendered.contains("resolves"), "Graph block")
         let levi = renderer.rows(blocks, columns: 72).first { $0.hasPrefix("Levi") && $0.contains("│") } ?? ""
-        try expect(levi.firstIndex(of: "▲")! > levi.firstIndex(of: "█")!, "Highlight after the standup")
+        try expect(levi.firstIndex(of: "▲")! > levi.firstIndex(of: "▇")!, "Highlight after the standup")
+        // A week labels each day over its own cells, the partial first day included.
+        let week = try ReportDocument(
+            title: "Week",
+            datasets: [],
+            blocks: [.timeline(.init(
+                start: morning + hour, end: morning + 6 * 24 * hour + 13 * hour, timeZone: "Europe/Amsterdam",
+                lanes: [.init(label: "Levi", spans: [.init(start: morning + 2 * 24 * hour + 3 * hour, end: morning + 2 * 24 * hour + 5 * hour, mark: .occupied)])]
+            ))]
+        )
+        let weekRows = renderer.rows(week, columns: 80)
+        let axis = weekRows.first { $0.contains("Wed 19") } ?? ""
+        let lane = weekRows.first { $0.hasPrefix("Levi") && $0.contains("│") } ?? ""
+        try expect(axis.contains("Tue 18") && axis.contains("Mon 24"), "First and last days labeled")
+        let thursday = axis.range(of: "Thu 20").map { axis.distance(from: axis.startIndex, to: $0.lowerBound) } ?? -1
+        let busy = lane.firstIndex(of: "▇").map { lane.distance(from: lane.startIndex, to: $0) } ?? -2
+        try expect(abs(thursday + 3 - busy) <= 3, "Day label sits over its day's spans")
         for width in [10, 24, 40, 72] {
             try expect(renderer.rows(blocks, columns: width).allSatisfy { TerminalDisplay.width(of: $0) <= width }, "Blocks fit width \(width)")
         }
