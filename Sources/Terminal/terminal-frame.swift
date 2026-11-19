@@ -198,12 +198,26 @@ public struct TerminalFrame:
                     columns: visibleColumns,
                     content:
                         index < lines.count
-                        ? lines[index]
+                        ? Self.singleRow(lines[index])
                         : "",
                     zIndex: zIndex
                 )
             )
         }
+    }
+
+    /// Line breaks and tabs measure zero columns, so clipping keeps them, and
+    /// the terminal would print the rest of the span on the row below.
+    static func singleRow(
+        _ line: String
+    ) -> String {
+        guard line.utf8.contains(where: { $0 == 0x0A || $0 == 0x0D || $0 == 0x09 }) else {
+            return line
+        }
+
+        return String(
+            line.map { $0 == "\n" || $0 == "\r" || $0 == "\r\n" || $0 == "\t" ? " " : $0 }
+        )
     }
 
     public func spans(

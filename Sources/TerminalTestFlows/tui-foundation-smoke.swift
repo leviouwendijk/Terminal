@@ -306,6 +306,24 @@ enum TerminalTUIFoundationSmoke {
         ] else {
             throw Failure.unexpectedFrame
         }
+
+        // A line break inside a dim description would move the terminal to
+        // the row below; the span keeps it on its own row.
+        var bleeding = TerminalFrame(
+            rows: 2,
+            columns: 20
+        )
+        bleeding.write(
+            ["> Slot  " + TerminalStyle.dim.apply("first\nsecond\tthird")],
+            in: TerminalRegion(top: 0, leading: 0, rows: 1, columns: 20)
+        )
+        var renderer = TerminalFrameRenderer()
+        let encoded = renderer.encode(bleeding)
+        guard !encoded.contains("\n"),
+              !encoded.contains("\t"),
+              bleeding.resolved().spans(inRow: 0).first?.content.contains("first second") == true else {
+            throw Failure.unexpectedFrame
+        }
     }
 
     private static func runFrameCompositionProbe() throws {
