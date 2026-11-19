@@ -117,7 +117,7 @@ struct TerminalReportingSmoke {
         ]
         let timeline = ReportBlock.Timeline(
             start: morning, end: morning + 10 * hour, timeZone: "Europe/Amsterdam",
-            lanes: [.init(label: "Levi", spans: leviSpans), .init(label: "Anna", spans: annaSpans)]
+            lanes: [.init(label: "Trainer A", spans: leviSpans), .init(label: "Anna", spans: annaSpans)]
         )
         let facts = ReportBlock.Facts(facts: [.init("Recommended", "Tue 18 Nov 10:00–11:00"), .init("Placement", "offered")])
         let callout = ReportBlock.Callout(tone: .warning, title: "Gaps", content: .paragraph([.text("No location given")]))
@@ -137,7 +137,7 @@ struct TerminalReportingSmoke {
         try expect(rendered.contains("▲") && rendered.contains("▇") && rendered.contains("▁") && rendered.contains("▄"), "Marks")
         try expect(rendered.contains("10:00–11:00 highlight · Proposed"), "Labeled spans listed")
         try expect(rendered.contains("Request") && rendered.contains("resolves"), "Graph block")
-        let levi = renderer.rows(blocks, columns: 72).first { $0.hasPrefix("Levi") && $0.contains("│") } ?? ""
+        let levi = renderer.rows(blocks, columns: 72).first { $0.hasPrefix("Trainer A") && $0.contains("│") } ?? ""
         try expect(levi.firstIndex(of: "▲")! > levi.firstIndex(of: "▇")!, "Highlight after the standup")
         // A week labels each day over its own cells, the partial first day included.
         let week = try ReportDocument(
@@ -145,12 +145,12 @@ struct TerminalReportingSmoke {
             datasets: [],
             blocks: [.timeline(.init(
                 start: morning + hour, end: morning + 6 * 24 * hour + 13 * hour, timeZone: "Europe/Amsterdam",
-                lanes: [.init(label: "Levi", spans: [.init(start: morning + 2 * 24 * hour + 3 * hour, end: morning + 2 * 24 * hour + 5 * hour, mark: .occupied)])]
+                lanes: [.init(label: "Trainer A", spans: [.init(start: morning + 2 * 24 * hour + 3 * hour, end: morning + 2 * 24 * hour + 5 * hour, mark: .occupied)])]
             ))]
         )
         let weekRows = renderer.rows(week, columns: 80)
         let axis = weekRows.first { $0.contains("Wed 19") } ?? ""
-        let lane = weekRows.first { $0.hasPrefix("Levi") && $0.contains("│") } ?? ""
+        let lane = weekRows.first { $0.hasPrefix("Trainer A") && $0.contains("│") } ?? ""
         try expect(axis.contains("Tue 18") && axis.contains("Mon 24"), "First and last days labeled")
         let thursday = axis.range(of: "Thu 20").map { axis.distance(from: axis.startIndex, to: $0.lowerBound) } ?? -1
         let busy = lane.firstIndex(of: "▇").map { lane.distance(from: lane.startIndex, to: $0) } ?? -2
@@ -161,7 +161,7 @@ struct TerminalReportingSmoke {
         // A wide grid wraps inside its columns instead of turning into a list.
         let grid = try ReportDataset(
             id: "grid",
-            columns: [.init("✓", kind: .text), .init("Start", kind: .text), .init("Levi", kind: .text), .init("Trainer B", kind: .text)],
+            columns: [.init("✓", kind: .text), .init("Start", kind: .text), .init("Trainer A", kind: .text), .init("Trainer B", kind: .text)],
             rows: [
                 .init(values: [.text("⚠"), .text("Thu 19 Nov 14:30–16:00"), .text("reserved 10:00–21:00\n11:00–12:30 o.v. Client C | Dog C"), .text("11:00–12:30 (6) Client A | Dog A [A]\n12:30–14:00 (9) Client B | Dog B [A]")]),
                 .init(values: [.text("✓"), .text("Sat 5 Dec 11:00–12:30"), .text("offered Slot 1"), .text("offered Slot 1")]),
@@ -170,13 +170,49 @@ struct TerminalReportingSmoke {
         )
         let gridReport = try ReportDocument(
             title: "Grid", datasets: [grid],
-            blocks: [.table(.init(dataset: "grid", columns: ["✓", "Start", "Levi", "Trainer B"]))]
+            blocks: [.table(.init(dataset: "grid", columns: ["✓", "Start", "Trainer A", "Trainer B"]))]
         )
         let gridRows = renderer.rows(gridReport, columns: 80)
         try expect(gridRows.contains { $0.hasPrefix("✓") && $0.contains("Trainer B") }, "Header stays a header row")
-        try expect(!gridRows.contains { $0.hasPrefix("Levi:") }, "No vertical fallback at 80 columns")
+        try expect(!gridRows.contains { $0.hasPrefix("Trainer A:") }, "No vertical fallback at 80 columns")
         try expect(gridRows.contains { $0.contains("12:30–14:00") }, "Each entry on its own line")
         try expect(gridRows.allSatisfy { TerminalDisplay.width(of: $0) <= 80 }, "Grid fits")
+
+        // An event reads as a boxed card; the day it sits in follows below.
+        let event = ReportBlock.Event(
+            title: "Weekly session",
+            interval: .init(start: morning + 2 * hour, end: morning + 3.5 * hour),
+            timeZone: "Europe/Amsterdam",
+            change: .create,
+            calendar: "Trainer A",
+            attendees: ["Trainer A", "Client A"],
+            warnings: ["Overlaps another event"],
+            context: .init(start: morning, end: morning + 10 * hour, timeZone: "Europe/Amsterdam", lanes: [
+                .init(label: "Trainer A", spans: [.init(start: morning + 2 * hour, end: morning + 3.5 * hour, mark: .highlight)]),
+            ])
+        )
+        let card = try ReportDocument(title: "Book", datasets: [], blocks: [.event(event)])
+        let cardRows = renderer.rows(card, columns: 80, includeTitle: false)
+        try expect(cardRows.first?.hasPrefix("╭─") == true && cardRows.first?.contains("New event") == true, "Card border names the change")
+        try expect(cardRows.contains { $0.contains("Weekly session") } && cardRows.contains { $0.contains("! Overlaps another event") }, "Title and warnings inside")
+        try expect(cardRows.contains { $0.hasPrefix("╰") } && cardRows.contains { $0.hasPrefix("Trainer A") && $0.contains("▲") }, "Context day under the box")
+        let boxed = cardRows.prefix { !$0.isEmpty }
+        try expect(Set(boxed.map(TerminalDisplay.width(of:))).count == 1, "Box edges line up")
+        for width in [12, 30, 80, 120] {
+            try expect(renderer.rows(card, columns: width).allSatisfy { TerminalDisplay.width(of: $0) <= width }, "Card fits width \(width)")
+        }
+
+        // Command lines: roles per token, breaks at pipeline stages.
+        let command = #"FOO=1 swift build -c release --product "t one" | grep -v $HOME && echo ${X} > out.txt # done"#
+        let roles = TerminalShellSyntax.tokens(command).filter { $0.role != .space }.map { "\($0.role.rawValue):\($0.text)" }
+        try expect(roles.prefix(4) == ["assignment:FOO=1", "command:swift", "argument:build", "option:-c"], "Leading roles")
+        try expect(roles.contains("string:\"t one\"") && roles.contains("control:|") && roles.contains("command:grep"), "Strings and pipes")
+        try expect(roles.contains("variable:$HOME") && roles.contains("variable:${X}") && roles.contains("redirect:>"), "Variables and redirects")
+        try expect(roles.last == "comment:# done", "Comments")
+        let narrow = TerminalShellSyntax.rows(command, columns: 40)
+        try expect(narrow.count >= 3 && narrow.allSatisfy { TerminalDisplay.width(of: $0) <= 40 }, "Stages break and fit")
+        try expect(narrow.contains { $0.replacingOccurrences(of: "\u{1B}\\[[0-9;]*m", with: "", options: .regularExpression).hasPrefix("  | grep") }, "A pipe starts its stage's row")
+        try expect(TerminalShellSyntax.rows("ls -la", columns: 40).count == 1, "A short line stays one row")
 
         print("TerminalReporting smoke: passed")
     }

@@ -43,6 +43,8 @@ public enum TerminalReporting {
                     section = calloutRows(callout, width: width)
                 case .timeline(let timeline):
                     section = timelineRows(timeline, width: width)
+                case .event(let event):
+                    section = eventRows(event, width: width)
                 case .graph(let graph):
                     section = graphRows(graph, width: width)
                 }

@@ -123,6 +123,40 @@ extension TerminalReporting.Renderer {
         return output
     }
 
+    /// A boxed card: heading in the border, title, labeled lines, warnings;
+    /// the surrounding day follows under the box, at full width.
+    func eventRows(_ event: ReportBlock.Event, width: Int) -> [String] {
+        let facts = ReportBlock.Facts(facts: event.lines)
+        let cardWidth = min(width, 76)
+        let inner = cardWidth - 4
+        guard inner >= 16 else {
+            return rows("\(event.heading): \(event.title)", width: width)
+                + factsRows(facts, width: width)
+                + event.warnings.flatMap { rows("! " + $0, width: width) }
+                + (event.context.map { [""] + timelineRows($0, width: width) } ?? [])
+        }
+
+        var body = rows(event.title, width: inner).map { TerminalStyle.bold.apply($0) }
+        body += factsRows(facts, width: inner)
+        for warning in event.warnings {
+            let wrapped = rows(warning, width: inner - 2)
+            body += wrapped.enumerated().map { ($0.offset == 0 ? "! " : "  ") + $0.element }
+        }
+
+        let label = " \(event.heading) "
+        let rule = String(repeating: "─", count: max(0, cardWidth - 3 - TerminalDisplay.width(of: label)))
+        var output = ["╭─" + TerminalStyle.dim.apply(label) + rule + "╮"]
+        output += body.map { line in
+            let padding = String(repeating: " ", count: max(0, inner - TerminalDisplay.width(of: line)))
+            return "│ " + line + padding + " │"
+        }
+        output.append("╰" + String(repeating: "─", count: cardWidth - 2) + "╯")
+        if let context = event.context {
+            output += [""] + timelineRows(context, width: width)
+        }
+        return output
+    }
+
     func rows(_ text: String, width: Int) -> [String] {
         TerminalTextLayout(text: tidy(text), columns: width).rows.map(\.content)
     }
