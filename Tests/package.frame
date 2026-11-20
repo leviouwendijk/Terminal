@@ -2,5 +2,10 @@ import Executable;
 
 let tests: Tests = .{
     .primary = "termtest",
-    .groups = .{ .navigation = ["t_terminal_navigation"] },
+    .groups = .{
+        .navigation = ["t_terminal_navigation"],
+        .ghostty = ["t_terminal_ghostty"],
+        .graph = ["t_terminal_graph"],
+        .reporting = ["t_terminal_reporting"],
+    },
 };
