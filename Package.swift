@@ -30,34 +30,12 @@ let package = Package(
             targets: ["TerminalGhostty"]
         ),
         .executable(
-            name: "t_terminal_ghostty",
-            targets: ["TerminalGhosttyTestFlows"]
-        ),
-        .executable(
-            name: "termtest",
-            targets: [
-                "TerminalTestFlows"
-            ]
-        ),
-        .executable(
             name: "diffpreview",
             targets: ["TerminalDifferencePreview"]
         ),
         .executable(
             name: "graphpreview",
             targets: ["TerminalGraphPreview"]
-        ),
-        .executable(
-            name: "t_terminal_reporting",
-            targets: ["TerminalReportingTesting"]
-        ),
-        .executable(
-            name: "t_terminal_graph",
-            targets: ["TerminalGraphTesting"]
-        ),
-        .executable(
-            name: "t_terminal_navigation",
-            targets: ["TerminalNavigationTests"]
         ),
     ],
     dependencies: [
@@ -71,7 +49,6 @@ let package = Package(
         .package(url: "https://github.com/leviouwendijk/Search.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Math.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Clipboard", branch: "master"),
-        .package(url: "https://github.com/leviouwendijk/Testing.git", branch: "master"),
     ],
     targets: [
         .binaryTarget(
@@ -82,13 +59,6 @@ let package = Package(
         .target(
             name: "TerminalGhostty",
             dependencies: ["GhosttyVt"]
-        ),
-        .executableTarget(
-            name: "TerminalGhosttyTestFlows",
-            dependencies: [
-                "Terminal",
-                "TerminalGhostty",
-            ]
         ),
         .target(
             name: "Terminal",
@@ -139,55 +109,10 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "TerminalGraphTesting",
-            dependencies: [
-                "Terminal",
-                "TerminalGraph",
-                .product(name: "Primitives", package: "Primitives"),
-            ]
-        ),
-        .executableTarget(
-            name: "TerminalReportingTesting",
-            dependencies: [
-                "Terminal",
-                "TerminalReporting",
-                .product(name: "Reporting", package: "Reporting"),
-                .product(name: "Search", package: "Search"),
-                .product(name: "Math", package: "Math"),
-                .product(name: "DSL", package: "DSL"),
-            ]
-        ),
-        .executableTarget(
-            name: "TerminalNavigationTests",
-            dependencies: [
-                "Terminal",
-                .product(name: "Primitives", package: "Primitives"),
-                .product(name: "Testing", package: "Testing"),
-            ],
-            path: "Testing/TerminalNavigationTests"
-        ),
-        .executableTarget(
             name: "TerminalDifferencePreview",
             dependencies: [
                 "Terminal",
                 .product(name: "Difference", package: "Difference")
-            ]
-        ),
-        .executableTarget(
-            name: "TerminalTestFlows",
-            dependencies: [
-                "Terminal",
-                "TerminalStructuredContent",
-                .product(
-                    name: "DSL",
-                    package: "DSL"
-                ),
-                .product(
-                    name: "Difference",
-                    package: "Difference"
-                ),
-                .product(name: "Tokens", package: "Tokens"),
-                .product(name: "Primitives", package: "Primitives"),
             ]
         ),
     ]
