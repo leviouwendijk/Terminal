@@ -1,0 +1,6 @@
+import Executable;
+
+let tests: Tests = .{
+    .primary = "termtest",
+    .groups = .{ .navigation = ["t_terminal_navigation"] },
+};
